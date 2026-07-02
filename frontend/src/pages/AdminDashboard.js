@@ -49,7 +49,7 @@ export default function AdminDashboard() {
     } catch (err) { toast.error(apiError(err)); }
   };
 
-  const pct = stats && stats.storage_limit_bytes ? Math.min(100, (stats.storage_used_bytes / stats.storage_limit_bytes) * 100) : 0;
+  const pct = stats && stats.gallery_limit ? Math.min(100, (stats.active_galleries / stats.gallery_limit) * 100) : 0;
 
   return (
     <AdminShell>
@@ -74,7 +74,7 @@ export default function AdminDashboard() {
       {stats && (
         <div className="sa-card p-4 mb-6">
           <div className="flex justify-between text-xs mb-2" style={{ color: "var(--sa-muted)" }}>
-            <span>Storage used</span><span>{formatBytes(stats.storage_used_bytes)} / {formatBytes(stats.storage_limit_bytes)}</span>
+            <span>{stats.plan_label} plan &middot; galleries used</span><span>{stats.active_galleries} / {stats.gallery_limit}</span>
           </div>
           <div className="h-2 rounded" style={{ background: "var(--sa-border)" }}>
             <div className="h-2 rounded" style={{ width: `${pct}%`, background: "var(--sa-gold)" }} />

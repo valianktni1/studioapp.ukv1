@@ -61,6 +61,14 @@ async def _enrich_gallery(g, tenant_id):
 
 @router.post("/galleries")
 async def create_gallery(body: GalleryCreate, ctx=Depends(get_current_tenant)):
+    from db import PLANS
+    tenant = await db.tenants.find_one({"id": ctx["tenant_id"]})
+    limit = tenant.get("gallery_limit")
+    if limit is None:
+        limit = PLANS.get(tenant.get("plan", "starter"), PLANS["starter"])["gallery_limit"]
+    current = await db.galleries.count_documents({"tenant_id": ctx["tenant_id"]})
+    if current >= limit:
+        raise HTTPException(status_code=402, detail=f"You've reached your plan limit of {limit} galleries. Upgrade to add more.")
     subfolders = body.subfolders
     if body.template_id:
         tpl = await db.templates.find_one({"id": body.template_id, "tenant_id": ctx["tenant_id"]})
@@ -156,7 +164,6 @@ async def upload_files(gid: str, subfolder: str = Form(...), files: list[UploadF
         raise HTTPException(status_code=404, detail="Gallery not found")
     tenant = await db.tenants.find_one({"id": ctx["tenant_id"]})
     used = tenant.get("storage_used_bytes", 0)
-    limit = tenant.get("storage_limit_bytes", 0)
     slug = slugify(subfolder)
     dest_dir = gallery_dir(ctx["tenant_id"], gid, slug)
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -164,8 +171,6 @@ async def upload_files(gid: str, subfolder: str = Form(...), files: list[UploadF
     for uf in files:
         data = await uf.read()
         size = len(data)
-        if used + size > limit:
-            raise HTTPException(status_code=413, detail="Storage limit exceeded for your plan")
         fpath = dest_dir / uf.filename
         with open(fpath, "wb") as f:
             f.write(data)
@@ -248,13 +253,16 @@ async def dashboard_stats(ctx=Depends(get_current_tenant)):
         if c == 0:
             pending += 1
     tenant = await db.tenants.find_one({"id": tid})
+    from db import PLANS
+    plan = PLANS.get(tenant.get("plan", "starter"), PLANS["starter"])
     return {
         "active_galleries": active_galleries,
         "expiring_soon": expiring,
         "downloads_this_week": downloads_week,
         "pending_albums": pending,
         "storage_used_bytes": tenant.get("storage_used_bytes", 0),
-        "storage_limit_bytes": tenant.get("storage_limit_bytes", 0),
+        "gallery_limit": tenant.get("gallery_limit", plan["gallery_limit"]),
+        "plan_label": plan["label"],
     }
 
 

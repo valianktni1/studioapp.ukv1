@@ -20,7 +20,7 @@ if not BASE_URL or BASE_URL == "http://localhost:8001":
 
 API = f"{BASE_URL}/api"
 SUPER = {"username": "superadmin", "password": "Stu!d10App_2026xQ"}
-DEMO = {"email": "demo@studioapp.uk", "password": "Demo!2026"}
+DEMO = {"email": "demo@studio-app.uk", "password": "Demo!2026"}
 
 
 def _png_bytes():
@@ -80,13 +80,13 @@ class TestSuperAdmin:
         data = r.json()
         assert isinstance(data, list)
         emails = [t["email"] for t in data]
-        assert "demo@studioapp.uk" in emails
+        assert "demo@studio-app.uk" in emails
 
     def test_overview(self, super_headers):
         r = requests.get(f"{API}/super-admin/overview", headers=super_headers)
         assert r.status_code == 200
         d = r.json()
-        for k in ("tenant_count", "mrr", "total_storage_used_bytes", "total_storage_limit_bytes", "plans"):
+        for k in ("tenant_count", "mrr", "total_storage_used_bytes", "total_galleries", "plans"):
             assert k in d
 
     def test_create_suspend_unsuspend_impersonate(self, super_headers):
@@ -138,11 +138,11 @@ class TestTenantAuth:
         r = requests.get(f"{API}/admin/me", headers=demo_headers)
         assert r.status_code == 200
         data = r.json()
-        assert data["email"] == "demo@studioapp.uk"
+        assert data["email"] == "demo@studio-app.uk"
         assert data["tenant"]["business_name"]
 
     def test_login_bad_password(self):
-        r = requests.post(f"{API}/admin/login", json={"email": "demo@studioapp.uk", "password": "wrong"})
+        r = requests.post(f"{API}/admin/login", json={"email": "demo@studio-app.uk", "password": "wrong"})
         assert r.status_code == 401
 
     def test_me_no_token(self):
@@ -182,7 +182,7 @@ class TestGalleryFlow:
         r = requests.get(f"{API}/admin/dashboard-stats", headers=demo_headers)
         assert r.status_code == 200
         d = r.json()
-        for k in ("active_galleries", "storage_used_bytes", "storage_limit_bytes"):
+        for k in ("active_galleries", "storage_used_bytes", "gallery_limit", "plan_label"):
             assert k in d
 
     def test_upload_image(self, demo_headers):
@@ -230,7 +230,7 @@ class TestGalleryFlow:
         pass  # covered in test_storage_quota_enforcement below
 
     def test_storage_quota_enforcement(self, super_headers):
-        email = f"quota_{uuid.uuid4().hex[:6]}@studioapp.uk"
+        pytest.skip("Replaced by gallery-limit test in iteration_2 tests")
         r = requests.post(f"{API}/super-admin/tenants", headers=super_headers, json={
             "business_name": "Quota Test", "email": email, "password": "P@ssw0rd!", "plan": "starter"})
         assert r.status_code == 200

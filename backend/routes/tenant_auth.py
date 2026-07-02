@@ -35,6 +35,8 @@ def _tenant_brand(t: dict) -> dict:
     t = _clean(t)
     plan = PLANS.get(t.get("plan", "starter"), PLANS["starter"])
     t["plan_label"] = plan["label"]
+    t["gallery_limit"] = t.get("gallery_limit", plan["gallery_limit"])
+    t["price"] = plan["price"]
     return t
 
 
@@ -59,6 +61,7 @@ async def change_password(body: PasswordChange, ctx=Depends(get_current_tenant))
 
 @router.post("/onboarding")
 async def complete_onboarding(body: OnboardingData, ctx=Depends(get_current_tenant)):
+    from routes.super_admin import make_unique_subdomain
     updates = {
         "business_name": body.business_name,
         "phone": body.phone,
@@ -68,6 +71,9 @@ async def complete_onboarding(body: OnboardingData, ctx=Depends(get_current_tena
         "secondary_color": body.secondary_color or "#0A0A0B",
         "onboarding_complete": True,
     }
+    current = await db.tenants.find_one({"id": ctx["tenant_id"]})
+    if not current.get("subdomain"):
+        updates["subdomain"] = await make_unique_subdomain(body.business_name)
     if body.contact_email:
         updates["email"] = body.contact_email
     await db.tenants.update_one({"id": ctx["tenant_id"]}, {"$set": updates})

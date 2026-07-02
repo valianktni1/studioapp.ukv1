@@ -261,7 +261,6 @@ async def guest_upload(token: str, files: list[UploadFile] = File(...)):
         raise HTTPException(status_code=403, detail="Guest uploads not enabled")
     tenant = await db.tenants.find_one({"id": s["tenant_id"]})
     used = tenant.get("storage_used_bytes", 0)
-    limit = tenant.get("storage_limit_bytes", 0)
     subfolder = "Guest Uploads"
     slug = slugify(subfolder)
     dest = gallery_dir(s["tenant_id"], s["gallery_id"], slug)
@@ -270,8 +269,6 @@ async def guest_upload(token: str, files: list[UploadFile] = File(...)):
     for uf in files:
         data = await uf.read()
         size = len(data)
-        if used + size > limit:
-            raise HTTPException(status_code=413, detail="Storage limit exceeded")
         with open(dest / uf.filename, "wb") as fh:
             fh.write(data)
         used += size
@@ -296,6 +293,21 @@ async def _find_file(gallery_id, filename, subfolder_slug=None):
     if subfolder_slug:
         q["subfolder_slug"] = subfolder_slug
     return await db.files.find_one(q)
+
+
+@router.get("/public/tenant/{subdomain}")
+async def public_tenant(subdomain: str):
+    t = await db.tenants.find_one({"subdomain": subdomain.lower()})
+    if not t or t.get("suspended"):
+        raise HTTPException(status_code=404, detail="Studio not found")
+    return {
+        "business_name": t.get("business_name"),
+        "subdomain": t.get("subdomain"),
+        "logo_url": t.get("logo_url"),
+        "accent_color": t.get("accent_color", "#D4AF37"),
+        "secondary_color": t.get("secondary_color", "#0A0A0B"),
+        "website": t.get("website"),
+    }
 
 
 @router.get("/media/thumb/{gallery_id}/{subfolder_slug}/{filename}")

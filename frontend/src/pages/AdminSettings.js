@@ -1,14 +1,19 @@
 import React, { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+import { Check } from "lucide-react";
 import AdminShell from "@/components/AdminShell";
 import { tenantApi, apiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
 export default function AdminSettings() {
   const { tenant, refresh } = useAuth();
-  const [tab, setTab] = useState("branding");
+  const [params, setParams] = useSearchParams();
+  const [tab, setTab] = useState(params.get("tab") || "branding");
   const [brand, setBrand] = useState({ business_name: "", phone: "", website: "", logo_url: "", accent_color: "#D4AF37", secondary_color: "#0A0A0B" });
   const [pw, setPw] = useState({ current_password: "", new_password: "" });
+  const [plans, setPlans] = useState({});
+  const [billingBusy, setBillingBusy] = useState("");
 
   useEffect(() => {
     if (tenant) setBrand({
@@ -28,7 +33,34 @@ export default function AdminSettings() {
     catch (err) { toast.error(apiError(err)); }
   };
 
-  const tabs = [["branding", "Branding"], ["password", "Password"], ["email", "Email (SMTP)"], ["twofa", "2FA"]];
+  // Billing: load plans + poll after Stripe redirect
+  useEffect(() => { tenantApi.get("/billing/plans").then(({ data }) => setPlans(data)).catch(() => {}); }, []);
+
+  useEffect(() => {
+    const sid = params.get("session_id");
+    if (!sid) return;
+    let n = 0;
+    const poll = async () => {
+      try {
+        const { data } = await tenantApi.get(`/billing/status/${sid}`);
+        if (data.payment_status === "paid") { toast.success("Payment successful — plan upgraded!"); await refresh(); params.delete("session_id"); setParams(params, { replace: true }); return; }
+        if (data.status === "expired") { toast.error("Payment expired"); params.delete("session_id"); setParams(params, { replace: true }); return; }
+      } catch {}
+      if (n++ < 6) setTimeout(poll, 2000);
+    };
+    toast.info("Confirming payment…");
+    poll();
+  }, []); // eslint-disable-line
+
+  const subscribe = async (planKey) => {
+    setBillingBusy(planKey);
+    try {
+      const { data } = await tenantApi.post("/billing/checkout", { plan: planKey, origin_url: window.location.origin });
+      window.location.href = data.url;
+    } catch (err) { toast.error(apiError(err)); setBillingBusy(""); }
+  };
+
+  const tabs = [["branding", "Branding"], ["billing", "Billing"], ["password", "Password"], ["email", "Email (SMTP)"], ["twofa", "2FA"]];
 
   return (
     <AdminShell>
@@ -55,6 +87,38 @@ export default function AdminSettings() {
           </div>
           <button className="sa-btn" data-testid="br-save">Save branding</button>
         </form>
+      )}
+
+      {tab === "billing" && (
+        <div className="max-w-3xl" data-testid="billing-panel">
+          <div className="sa-card p-5 mb-6 flex items-center justify-between">
+            <div>
+              <span className="sa-label">Current plan</span>
+              <div className="font-display text-3xl">{tenant?.plan_label} &middot; £{tenant?.price}/mo</div>
+              <p className="text-sm" style={{ color: "var(--sa-muted)" }}>{tenant?.gallery_limit} galleries included</p>
+            </div>
+            <div className="text-right">
+              <span className="sa-label">Your subdomain</span>
+              <div className="font-medium" style={{ color: "var(--sa-gold)" }}>{tenant?.subdomain}.studio-app.uk</div>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {Object.entries(plans).map(([key, p]) => {
+              const current = tenant?.plan === key;
+              return (
+                <div key={key} className="sa-card p-6 flex flex-col" style={current ? { borderColor: "var(--sa-gold)" } : {}} data-testid={`billing-plan-${key}`}>
+                  <h3 className="font-display text-2xl">{p.label}</h3>
+                  <div className="my-3"><span className="text-3xl font-bold">£{p.price}</span><span style={{ color: "var(--sa-muted)" }}>/mo</span></div>
+                  <p className="mb-5 text-sm" style={{ color: "var(--sa-muted)" }}>{p.gallery_limit} galleries</p>
+                  {current
+                    ? <span className="sa-btn-ghost mt-auto justify-center" style={{ color: "var(--sa-gold)" }}><Check size={16} /> Current plan</span>
+                    : <button className="sa-btn mt-auto" disabled={billingBusy === key} onClick={() => subscribe(key)} data-testid={`subscribe-${key}`}>{billingBusy === key ? "Redirecting…" : `Switch to ${p.label}`}</button>}
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-xs mt-4" style={{ color: "var(--sa-muted)" }}>Secure card payments via Stripe. PayPal coming soon.</p>
+        </div>
       )}
 
       {tab === "password" && (

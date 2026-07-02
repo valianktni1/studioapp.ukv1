@@ -33,6 +33,16 @@ async def create_share(gid: str, body: ShareCreate, ctx=Depends(get_current_tena
         exists = await db.shares.find_one({"custom_slug": body.custom_slug})
         if exists:
             raise HTTPException(status_code=400, detail="Custom slug already taken")
+    else:
+        # auto-generate a vanity slug from the gallery (couple) name + date
+        from media import slugify as _sl
+        base = _sl(g.get("folder_name", "gallery"))
+        cand = base
+        n = 1
+        while await db.shares.find_one({"custom_slug": cand}):
+            n += 1
+            cand = f"{base}-{n}"
+        body.custom_slug = cand
     doc = {
         "id": str(uuid.uuid4()), "tenant_id": ctx["tenant_id"], "gallery_id": gid,
         "token": secrets.token_urlsafe(10),

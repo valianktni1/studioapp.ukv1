@@ -94,7 +94,7 @@ export default function SuperAdminDashboard() {
             <StatCard icon={Users} label="Studios" value={overview.tenant_count} tint="#D4AF37" />
             <StatCard icon={Play} label="Active" value={overview.active_count} tint="#4ade80" />
             <StatCard icon={DollarSign} label="MRR" value={`£${overview.mrr}`} tint="#60a5fa" />
-            <StatCard icon={HardDrive} label="Storage Used" value={formatBytes(overview.total_storage_used_bytes)} tint="#a78bfa" />
+            <StatCard icon={HardDrive} label="Galleries" value={overview.total_galleries} tint="#a78bfa" />
           </div>
         )}
 
@@ -109,8 +109,8 @@ export default function SuperAdminDashboard() {
               <tr className="text-left" style={{ color: "var(--sa-muted)", borderBottom: "1px solid var(--sa-border)" }}>
                 <th className="p-4 font-medium">Studio</th>
                 <th className="p-4 font-medium">Plan</th>
-                <th className="p-4 font-medium">Storage</th>
                 <th className="p-4 font-medium">Galleries</th>
+                <th className="p-4 font-medium">Subdomain</th>
                 <th className="p-4 font-medium">Status</th>
                 <th className="p-4 font-medium text-right">Actions</th>
               </tr>
@@ -123,8 +123,8 @@ export default function SuperAdminDashboard() {
                     <div style={{ color: "var(--sa-muted)" }} className="text-xs">{t.email}</div>
                   </td>
                   <td className="p-4">{t.plan_label}</td>
-                  <td className="p-4">{formatBytes(t.storage_used_bytes)} / {formatBytes(t.storage_limit_bytes)}</td>
-                  <td className="p-4">{t.gallery_count}</td>
+                  <td className="p-4">{t.gallery_count} / {t.gallery_limit}</td>
+                  <td className="p-4"><span style={{ color: "var(--sa-muted)" }}>{t.subdomain}.studio-app.uk</span></td>
                   <td className="p-4">
                     <span className="px-2 py-1 rounded text-xs" style={{ background: t.suspended ? "rgba(248,113,113,0.15)" : "rgba(74,222,128,0.15)", color: t.suspended ? "#f87171" : "#4ade80" }}>
                       {t.suspended ? "Suspended" : "Active"}

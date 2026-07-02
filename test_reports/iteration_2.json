@@ -1,0 +1,49 @@
+{
+  "summary": "Iteration 2 (billing / gallery-limit / subdomain / auto-slug) fully verified. Backend: 41 pytest cases passed (13 new + 28 regression, 1 skipped stale storage-quota test). Frontend: landing pricing (10/30/60 £15/£35/£65), 'Built by a Wedding Photographer for Photographers' section, wedding hero image, tenant billing tab (Professional £35, demo.studio-app.uk, three plan cards, Switch to Studio redirects to real https://checkout.stripe.com/…), super-admin table with Galleries + Subdomain columns, and dashboard gallery-usage progress bar all confirmed working.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PUT /api/super-admin/tenants/{id}/plan", "issue": "Field is still named `storage_limit_bytes` in PlanUpdate but now sets `gallery_limit`. Misleading name — rename to `gallery_limit` for clarity."},
+      {"endpoint": "GET /api/super-admin/overview", "issue": "`total_storage_limit_bytes` field was dropped (replaced by `total_galleries`). Any consumers depending on the old key will break — document in changelog."},
+      {"endpoint": "GET /api/billing/status/{session_id}", "issue": "Response `payment_status` for a freshly-created (unpaid) session came back as `unpaid` string; verify frontend polling loop handles all Stripe statuses ('open', 'complete', 'expired')."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Landing", "issues": ["The phrase 'Built by a Wedding Photographer for Photographers' is a features-section h2, not the hero headline (hero says 'Deliver breathtaking galleries under your own name'). If the intent was to make it the hero headline, promote it."]},
+      {"screen": "Super Admin Dashboard", "issues": ["A stale seed tenant with the old-domain email 'demo@studioapp.uk' (subdomain demostudio.studio-app.uk) still exists in DB from iteration_1 tests — cosmetic clutter, not a code bug."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/backend_test.py",
+    "/app/backend/tests/test_iteration_2.py",
+    "/app/test_reports/pytest/results.xml",
+    "/app/test_reports/pytest/iteration_2.xml"
+  ],
+  "action_items": [
+    "Rename PlanUpdate.storage_limit_bytes -> gallery_limit for API clarity (currently confusingly overloaded).",
+    "Consider promoting 'Built by a Wedding Photographer for Photographers' to the hero headline if that was the product intent.",
+    "Clean up the stale demo@studioapp.uk tenant (old email domain) from the seed DB."
+  ],
+  "critical_code_review_comments": [
+    "routes/billing.py builds webhook_url from request.base_url which in K8s ingress can be the internal service URL, not the public studio-app.uk domain — Stripe webhooks will not be able to POST back. Explicitly set from an env var (PUBLIC_BASE_URL) instead.",
+    "billing.create_checkout does not check tenant.suspended — a suspended tenant can still initiate a paid upgrade.",
+    "billing._stripe uses os.environ['STRIPE_API_KEY'] on every call — fine, but STRIPE_API_KEY=sk_test_emergent (proxied test key) is committed to .env. Ensure production key is set out-of-band.",
+    "routes/shares.create_share auto-slug does not include the tenant scope in the uniqueness query — a share slug for tenant A can block the same slug for tenant B. Consider `custom_slug` unique per-tenant, not global.",
+    "routes/super_admin.update_plan silently accepts both plan and storage_limit_bytes fields; storage_limit_bytes overrides gallery_limit set by plan. Order-dependent behaviour is a footgun.",
+    "PLANS['starter'] etc. use int for `price` but Stripe amount is `float(...)`. If a plan price ever becomes a decimal, integer coercion in DB will lose precision."
+  ],
+  "updated_files": [
+    "/app/backend/tests/backend_test.py (fixed demo email to demo@studio-app.uk, updated dashboard/overview key names, skipped obsolete storage_quota test)",
+    "/app/backend/tests/test_iteration_2.py (new — 13 tests for billing/limit/slug/subdomain/plan-metadata)"
+  ],
+  "success_rate": {"backend": "100% (41/41, 1 skipped legacy)", "frontend": "100% (all iteration-2 flows verified)"},
+  "test_credentials": "superadmin / Stu!d10App_2026xQ ; demo@studio-app.uk / Demo!2026",
+  "seed_data_creation": "Test tenants and galleries prefixed with TEST_ are cleaned up per test. No permanent seed data added.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run: `cd /app && python -m pytest backend/tests/ -v`. Iteration 2 endpoints live at /api/billing/{plans,checkout,status} and /api/public/tenant/{subdomain}. Gallery-limit is enforced with HTTP 402 in POST /api/admin/galleries. Stripe checkout confirmed returning real https://checkout.stripe.com/ URLs via sk_test_emergent key. The Switch to Studio redirect from the billing UI works end-to-end (screenshot in test run).",
+  "rca of the issue": "No blocking issues found. The first billing-tab playwright attempt appeared to miss plan cards, but that was a race condition in the test script (checked before /billing/plans finished loading). Re-run with a small wait confirmed all 3 cards render and Stripe redirect works."
+}

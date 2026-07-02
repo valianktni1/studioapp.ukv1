@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import { Camera, ShieldCheck, HardDrive, Share2, Video, Sparkles, ArrowRight } from "lucide-react";
 import Footer from "@/components/Footer";
 
-const HERO = "https://images.unsplash.com/photo-1471341971476-ae15ff5dd4ea?crop=entropy&cs=srgb&fm=jpg&q=85&w=1920";
+const HERO = "https://images.pexels.com/photos/11813966/pexels-photo-11813966.jpeg";
 
 const features = [
   { icon: Share2, title: "Client Galleries", body: "Password-protected, branded galleries your couples will love. View, favourite, download." },
@@ -49,7 +49,7 @@ export default function Landing() {
       </section>
 
       <section className="max-w-7xl mx-auto px-6 sm:px-10 py-24 w-full">
-        <h2 className="font-display text-4xl font-semibold mb-3">Everything your studio needs</h2>
+        <h2 className="font-display text-4xl font-semibold mb-3">Built by a Wedding Photographer for Photographers</h2>
         <p style={{ color: "var(--sa-muted)" }} className="mb-12 max-w-2xl">One calm, cinematic platform that keeps your brand front and centre.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {features.map((f, i) => (
@@ -67,16 +67,16 @@ export default function Landing() {
         <h2 className="font-display text-4xl font-semibold mb-12 text-center">Simple, studio-sized pricing</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {[
-            { name: "Starter", storage: "250 GB", price: 19, featured: false },
-            { name: "Pro", storage: "500 GB", price: 39, featured: true },
-            { name: "Studio", storage: "1 TB", price: 79, featured: false },
+            { name: "Starter", galleries: "10 galleries", price: 15, featured: false },
+            { name: "Professional", galleries: "30 galleries", price: 35, featured: true },
+            { name: "Studio", galleries: "60 galleries", price: 65, featured: false },
           ].map((p) => (
             <div key={p.name} className="sa-card p-8 flex flex-col" style={p.featured ? { borderColor: "var(--sa-gold)" } : {}} data-testid={`plan-${p.name.toLowerCase()}`}>
               {p.featured && <span className="sa-label mb-3" style={{ color: "var(--sa-gold)" }}>Most popular</span>}
               <h3 className="font-display text-3xl">{p.name}</h3>
               <div className="my-4"><span className="text-4xl font-bold">£{p.price}</span><span style={{ color: "var(--sa-muted)" }}>/mo</span></div>
-              <p style={{ color: "var(--sa-muted)" }} className="mb-6">{p.storage} storage &middot; unlimited galleries</p>
-              <Link to="/login" className={p.featured ? "sa-btn mt-auto" : "sa-btn-ghost mt-auto"} data-testid={`plan-cta-${p.name.toLowerCase()}`}>Get {p.name}</Link>
+              <p style={{ color: "var(--sa-muted)" }} className="mb-6">{p.galleries} &middot; unlimited photos &amp; video</p>
+              <Link to="/login" className={p.featured ? "sa-btn mt-auto" : "sa-btn-ghost mt-auto"} data-testid={`plan-cta-${p.name.toLowerCase()}`}>Choose {p.name}</Link>
             </div>
           ))}
         </div>

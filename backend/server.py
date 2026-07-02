@@ -7,7 +7,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from db import db, PLANS
 from auth_utils import hash_password, verify_password
-from routes import super_admin, tenant_auth, galleries, shares, public_share
+from routes import super_admin, tenant_auth, galleries, shares, public_share, billing
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("studioapp")
@@ -30,6 +30,7 @@ app.include_router(tenant_auth.router)
 app.include_router(galleries.router)
 app.include_router(shares.router)
 app.include_router(public_share.router)
+app.include_router(billing.router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -59,15 +60,16 @@ async def seed_super_admin():
 
 
 async def seed_demo_tenant():
-    email = "demo@studioapp.uk"
+    email = "demo@studio-app.uk"
     if await db.admins.find_one({"email": email}):
         return
     tenant_id = str(uuid.uuid4())
     await db.tenants.insert_one({
         "id": tenant_id, "business_name": "Demo Studio", "email": email,
+        "subdomain": "demo",
         "logo_url": None, "accent_color": "#D4AF37", "secondary_color": "#0A0A0B",
-        "phone": None, "website": None, "plan": "pro",
-        "storage_limit_bytes": PLANS["pro"]["storage_limit_bytes"], "storage_used_bytes": 0,
+        "phone": None, "website": None, "plan": "professional",
+        "gallery_limit": PLANS["professional"]["gallery_limit"], "storage_used_bytes": 0,
         "subscription_status": "active", "stripe_customer_id": None, "stripe_subscription_id": None,
         "suspended": False, "onboarding_complete": True, "created_at": now_iso()})
     await db.admins.insert_one({
@@ -77,10 +79,26 @@ async def seed_demo_tenant():
     logger.info("Seeded demo tenant: %s", email)
 
 
+async def migrate_tenants():
+    from routes.super_admin import make_unique_subdomain
+    async for t in db.tenants.find({}):
+        updates = {}
+        if t.get("plan") == "pro":
+            updates["plan"] = "professional"
+        plan = updates.get("plan", t.get("plan", "starter"))
+        if not t.get("gallery_limit"):
+            updates["gallery_limit"] = PLANS.get(plan, PLANS["starter"])["gallery_limit"]
+        if not t.get("subdomain"):
+            updates["subdomain"] = await make_unique_subdomain(t.get("business_name", "studio"))
+        if updates:
+            await db.tenants.update_one({"id": t["id"]}, {"$set": updates})
+
+
 async def create_indexes():
     await db.super_admins.create_index("username", unique=True)
     await db.admins.create_index("email", unique=True)
     await db.tenants.create_index("id", unique=True)
+    await db.tenants.create_index("subdomain")
     await db.galleries.create_index([("tenant_id", 1), ("created_at", -1)])
     await db.files.create_index([("tenant_id", 1), ("gallery_id", 1)])
     await db.files.create_index([("gallery_id", 1), ("filename", 1)])
@@ -93,6 +111,7 @@ async def startup():
     await create_indexes()
     await seed_super_admin()
     await seed_demo_tenant()
+    await migrate_tenants()
 
 
 @app.on_event("shutdown")

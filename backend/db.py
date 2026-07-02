@@ -15,10 +15,9 @@ BACKUP_DIR = Path(os.environ.get("BACKUP_DIR", str(ROOT_DIR / "storage" / "backu
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 
-# Subscription plans -> storage limits (bytes)
-GB = 1024 ** 3
+# Subscription plans -> gallery limits (number of top-level galleries)
 PLANS = {
-    "starter": {"label": "Starter", "storage_limit_bytes": 250 * GB, "price": 19},
-    "pro": {"label": "Pro", "storage_limit_bytes": 500 * GB, "price": 39},
-    "studio": {"label": "Studio", "storage_limit_bytes": 1024 * GB, "price": 79},
+    "starter": {"label": "Starter", "gallery_limit": 10, "price": 15},
+    "professional": {"label": "Professional", "gallery_limit": 30, "price": 35},
+    "studio": {"label": "Studio", "gallery_limit": 60, "price": 65},
 }
