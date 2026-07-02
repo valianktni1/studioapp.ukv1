@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Q
 from fastapi.responses import FileResponse, Response
 
 from db import db
-from auth_utils import get_current_tenant
+from auth_utils import get_current_tenant, assert_trial_active
 from models import GalleryCreate, GalleryUpdate, TemplateCreate, DEFAULT_SUBFOLDERS
 from media import (
     slugify, file_type_for, gallery_dir, cache_dir, remove_path,
@@ -63,6 +63,7 @@ async def _enrich_gallery(g, tenant_id):
 async def create_gallery(body: GalleryCreate, ctx=Depends(get_current_tenant)):
     from db import PLANS
     tenant = await db.tenants.find_one({"id": ctx["tenant_id"]})
+    assert_trial_active(tenant)
     limit = tenant.get("gallery_limit")
     if limit is None:
         limit = PLANS.get(tenant.get("plan", "starter"), PLANS["starter"])["gallery_limit"]
@@ -163,6 +164,7 @@ async def upload_files(gid: str, subfolder: str = Form(...), files: list[UploadF
     if not g:
         raise HTTPException(status_code=404, detail="Gallery not found")
     tenant = await db.tenants.find_one({"id": ctx["tenant_id"]})
+    assert_trial_active(tenant)
     used = tenant.get("storage_used_bytes", 0)
     slug = slugify(subfolder)
     dest_dir = gallery_dir(ctx["tenant_id"], gid, slug)

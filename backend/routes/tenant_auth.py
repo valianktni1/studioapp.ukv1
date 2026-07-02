@@ -1,8 +1,8 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException
 
 from db import db, PLANS
-from auth_utils import verify_password, hash_password, create_token, get_current_tenant, _clean
+from auth_utils import verify_password, hash_password, create_token, get_current_tenant, _clean, trial_info, TRIAL_DAYS
 from models import RegisterRequest, AdminLogin, PasswordChange, OnboardingData
 
 router = APIRouter(prefix="/api/admin", tags=["tenant-auth"])
@@ -22,13 +22,14 @@ async def register(body: RegisterRequest):
     plan = body.plan if body.plan in PLANS else "starter"
     tenant_id = str(uuid.uuid4())
     subdomain = await make_unique_subdomain(body.business_name)
+    trial_ends = (datetime.now(timezone.utc) + timedelta(days=TRIAL_DAYS)).isoformat()
     tenant = {
         "id": tenant_id, "business_name": body.business_name, "email": email,
         "subdomain": subdomain, "logo_url": None, "accent_color": "#D4AF37",
         "secondary_color": "#0A0A0B", "phone": None, "website": None, "plan": plan,
         "gallery_limit": PLANS[plan]["gallery_limit"], "storage_used_bytes": 0,
-        "subscription_status": "active", "stripe_customer_id": None,
-        "stripe_subscription_id": None, "suspended": False,
+        "subscription_status": "trialing", "trial_ends_at": trial_ends,
+        "stripe_customer_id": None, "stripe_subscription_id": None, "suspended": False,
         "onboarding_complete": False, "created_at": now_iso(),
     }
     await db.tenants.insert_one(tenant)
@@ -62,11 +63,16 @@ async def admin_login(body: AdminLogin):
 
 
 def _tenant_brand(t: dict) -> dict:
+    ti = trial_info(t)
     t = _clean(t)
     plan = PLANS.get(t.get("plan", "starter"), PLANS["starter"])
     t["plan_label"] = plan["label"]
     t["gallery_limit"] = t.get("gallery_limit", plan["gallery_limit"])
     t["price"] = plan["price"]
+    t["subscription_status"] = ti["status"]
+    t["trial_expired"] = ti["trial_expired"]
+    t["trial_days_left"] = ti["trial_days_left"]
+    t["trial_ends_at"] = ti["trial_ends_at"]
     return t
 
 

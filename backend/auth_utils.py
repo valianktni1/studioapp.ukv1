@@ -8,6 +8,29 @@ from db import db
 
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_DAYS = 7
+TRIAL_DAYS = 7
+
+
+def trial_info(t: dict) -> dict:
+    """Effective subscription/trial state for a tenant."""
+    status = t.get("subscription_status") or "trialing"
+    ends = t.get("trial_ends_at")
+    if status in ("active", "comp"):
+        return {"status": status, "trial_expired": False, "trial_days_left": None, "trial_ends_at": ends}
+    expired, days_left = False, None
+    if ends:
+        try:
+            secs = (datetime.fromisoformat(ends) - datetime.now(timezone.utc)).total_seconds()
+            expired = secs <= 0
+            days_left = 0 if expired else int((secs + 86399) // 86400)
+        except Exception:
+            pass
+    return {"status": status, "trial_expired": expired, "trial_days_left": days_left, "trial_ends_at": ends}
+
+
+def assert_trial_active(t: dict):
+    if trial_info(t)["trial_expired"]:
+        raise HTTPException(status_code=402, detail="Your 7-day free trial has ended. Choose a plan to continue.")
 
 
 def get_jwt_secret() -> str:

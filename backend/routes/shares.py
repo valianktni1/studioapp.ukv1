@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 
 from db import db
-from auth_utils import get_current_tenant, hash_password, verify_password
+from auth_utils import get_current_tenant, hash_password, verify_password, assert_trial_active
 from models import ShareCreate
 
 router = APIRouter(prefix="/api/admin", tags=["shares"])
@@ -29,6 +29,8 @@ async def create_share(gid: str, body: ShareCreate, ctx=Depends(get_current_tena
     g = await db.galleries.find_one({"id": gid, "tenant_id": ctx["tenant_id"]})
     if not g:
         raise HTTPException(status_code=404, detail="Gallery not found")
+    tenant = await db.tenants.find_one({"id": ctx["tenant_id"]})
+    assert_trial_active(tenant)
     if body.custom_slug:
         exists = await db.shares.find_one({"custom_slug": body.custom_slug})
         if exists:

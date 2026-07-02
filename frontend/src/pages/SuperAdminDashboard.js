@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { LogOut, Plus, Ban, Play, Trash2, UserCog, Users, DollarSign, HardDrive } from "lucide-react";
+import { LogOut, Plus, Ban, Play, Trash2, UserCog, Users, DollarSign, HardDrive, Infinity, CalendarPlus } from "lucide-react";
 import { superApi, SUPER_TOKEN_KEY, TENANT_TOKEN_KEY, formatBytes, apiError } from "@/lib/api";
 import Footer from "@/components/Footer";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -75,6 +75,16 @@ export default function SuperAdminDashboard() {
     } catch (err) { toast.error(apiError(err)); }
   };
 
+  const extendTrial = async (t, days) => {
+    try { await superApi.put(`/super-admin/tenants/${t.id}/trial`, { days }); toast.success(`Trial extended by ${days} days`); load(); }
+    catch (err) { toast.error(apiError(err)); }
+  };
+
+  const compTenant = async (t) => {
+    try { await superApi.put(`/super-admin/tenants/${t.id}/trial`, { unlimited: true }); toast.success(`${t.business_name} set to unlimited (comp)`); load(); }
+    catch (err) { toast.error(apiError(err)); }
+  };
+
   const logout = () => { localStorage.removeItem(SUPER_TOKEN_KEY); nav("/super-admin"); };
 
   return (
@@ -130,12 +140,22 @@ export default function SuperAdminDashboard() {
                   <td className="p-4">{t.gallery_count} / {t.gallery_limit}</td>
                   <td className="p-4"><span style={{ color: "var(--sa-muted)" }}>{t.subdomain}.studio-app.uk</span></td>
                   <td className="p-4">
-                    <span className="px-2 py-1 rounded text-xs" style={{ background: t.suspended ? "rgba(248,113,113,0.15)" : "rgba(74,222,128,0.15)", color: t.suspended ? "#f87171" : "#4ade80" }}>
-                      {t.suspended ? "Suspended" : "Active"}
-                    </span>
+                    {t.suspended ? (
+                      <span className="px-2 py-1 rounded text-xs" style={{ background: "rgba(248,113,113,0.15)", color: "#f87171" }}>Suspended</span>
+                    ) : t.subscription_status === "comp" ? (
+                      <span className="px-2 py-1 rounded text-xs" style={{ background: "rgba(96,165,250,0.15)", color: "#60a5fa" }}>Comp · Unlimited</span>
+                    ) : t.subscription_status === "active" ? (
+                      <span className="px-2 py-1 rounded text-xs" style={{ background: "rgba(74,222,128,0.15)", color: "#4ade80" }}>Active</span>
+                    ) : t.trial_expired ? (
+                      <span className="px-2 py-1 rounded text-xs" style={{ background: "rgba(248,113,113,0.15)", color: "#f87171" }}>Trial ended</span>
+                    ) : (
+                      <span className="px-2 py-1 rounded text-xs" style={{ background: "rgba(212,175,55,0.15)", color: "var(--sa-gold)" }}>Trial · {t.trial_days_left}d</span>
+                    )}
                   </td>
                   <td className="p-4">
                     <div className="flex items-center justify-end gap-2">
+                      <button title="Extend trial +7 days" className="sa-btn-ghost !p-2" onClick={() => extendTrial(t, 7)} data-testid={`extend-${t.id}`}><CalendarPlus size={15} /></button>
+                      <button title="Comp — unlimited free access" className="sa-btn-ghost !p-2" onClick={() => compTenant(t)} data-testid={`comp-${t.id}`}><Infinity size={15} color="#60a5fa" /></button>
                       <button title="Impersonate" className="sa-btn-ghost !p-2" onClick={() => impersonate(t)} data-testid={`impersonate-${t.id}`}><UserCog size={15} /></button>
                       <button title={t.suspended ? "Unsuspend" : "Suspend"} className="sa-btn-ghost !p-2" onClick={() => toggleSuspend(t)} data-testid={`suspend-${t.id}`}>{t.suspended ? <Play size={15} /> : <Ban size={15} />}</button>
                       <button title="Delete" className="sa-btn-ghost !p-2" onClick={() => del(t)} data-testid={`delete-${t.id}`}><Trash2 size={15} color="#f87171" /></button>

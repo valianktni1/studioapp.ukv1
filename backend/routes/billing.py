@@ -62,7 +62,7 @@ async def _apply_if_paid(tx, checkout_status):
         plan = tx["plan"]
         await db.tenants.update_one({"id": tx["tenant_id"]}, {"$set": {
             "plan": plan, "gallery_limit": PLANS[plan]["gallery_limit"],
-            "subscription_status": "active", "suspended": False,
+            "subscription_status": "active", "trial_ends_at": None, "suspended": False,
         }})
         await db.payment_transactions.update_one({"session_id": tx["session_id"]}, {"$set": {"applied": True}})
 

@@ -40,5 +40,10 @@ Turn a single-tenant wedding photography gallery system into a **multi-tenant Sa
 - Security notes: gate /api/media/* before prod; set PUBLIC_BASE_URL for Stripe webhook; consider per-tenant share slug once subdomain routing is live.
 
 ## Next Tasks
-1. Confirm scope/priority with user (billing vs email vs video first).
-2. Stripe billing (test key available in env) or SMTP email suite next.
+1. PayPal (awaiting credentials).
+2. Redeploy after each change (Save to Github -> Dockge rebuild).
+
+## Trials & Self-Signup (2026-07-02)
+- Public signup POST /api/admin/register -> creates tenant+admin, auto subdomain, starts **7-day free trial** (subscription_status="trialing", trial_ends_at=now+7d), auto-login -> onboarding. Landing/login CTAs wired to /signup.
+- Trial enforcement: write actions (create gallery, upload, create share) return 402 once trial expired & unpaid; login + billing remain reachable so they can pay. Stripe payment -> subscription_status="active", trial cleared.
+- Super admin trial control: PUT /api/super-admin/tenants/{id}/trial {days:N} (extend, adds to remaining) or {unlimited:true} (comp = free forever). Dashboard shows Trial·Xd / Active / Comp·Unlimited / Trial ended, with +7d and ∞ (comp) buttons per tenant.

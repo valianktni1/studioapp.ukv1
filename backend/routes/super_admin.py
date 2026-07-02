@@ -49,11 +49,17 @@ async def super_me(sa=Depends(get_current_super_admin)):
 
 
 async def _tenant_public(t: dict) -> dict:
+    from auth_utils import trial_info
+    ti = trial_info(t)
     t = _clean(t)
     plan = PLANS.get(t.get("plan", "starter"), PLANS["starter"])
     t["plan_label"] = plan["label"]
     t["gallery_limit"] = t.get("gallery_limit", plan["gallery_limit"])
     t["price"] = plan["price"]
+    t["subscription_status"] = ti["status"]
+    t["trial_expired"] = ti["trial_expired"]
+    t["trial_days_left"] = ti["trial_days_left"]
+    t["trial_ends_at"] = ti["trial_ends_at"]
     return t
 
 
@@ -110,6 +116,34 @@ async def create_tenant(body: TenantCreate, sa=Depends(get_current_super_admin))
     }
     await db.admins.insert_one(admin)
     return await _tenant_public(tenant)
+
+
+@router.put("/tenants/{tenant_id}/trial")
+async def set_trial(tenant_id: str, body: dict, sa=Depends(get_current_super_admin)):
+    from datetime import timedelta
+    tenant = await db.tenants.find_one({"id": tenant_id})
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    if body.get("unlimited"):
+        # Comp account — free forever, no trial expiry
+        updates = {"subscription_status": "comp", "trial_ends_at": None}
+    elif body.get("days") is not None:
+        days = int(body["days"])
+        now = datetime.now(timezone.utc)
+        current = tenant.get("trial_ends_at")
+        base = now
+        if current:
+            try:
+                cur_dt = datetime.fromisoformat(current)
+                base = cur_dt if cur_dt > now else now
+            except Exception:
+                base = now
+        updates = {"subscription_status": "trialing", "trial_ends_at": (base + timedelta(days=days)).isoformat()}
+    else:
+        raise HTTPException(status_code=400, detail="Provide 'days' or 'unlimited'")
+    await db.tenants.update_one({"id": tenant_id}, {"$set": updates})
+    t = await db.tenants.find_one({"id": tenant_id})
+    return await _tenant_public(t)
 
 
 @router.put("/tenants/{tenant_id}/plan")

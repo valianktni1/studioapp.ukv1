@@ -50,15 +50,29 @@ export default function AdminDashboard() {
   };
 
   const pct = stats && stats.gallery_limit ? Math.min(100, (stats.active_galleries / stats.gallery_limit) * 100) : 0;
+  const trialing = tenant?.subscription_status === "trialing";
+  const trialExpired = tenant?.trial_expired;
 
   return (
     <AdminShell>
+      {trialing && !trialExpired && (
+        <div className="sa-card p-4 mb-5 flex items-center justify-between" style={{ borderColor: "var(--sa-gold)" }} data-testid="trial-banner">
+          <span className="text-sm">You have <b>{tenant.trial_days_left} day{tenant.trial_days_left === 1 ? "" : "s"}</b> left in your free trial.</span>
+          <Link to="/admin/settings?tab=billing" className="sa-btn !py-2" data-testid="trial-upgrade">Choose a plan</Link>
+        </div>
+      )}
+      {trialExpired && (
+        <div className="sa-card p-4 mb-5 flex items-center justify-between" style={{ borderColor: "#f87171" }} data-testid="trial-expired-banner">
+          <span className="text-sm" style={{ color: "#f87171" }}>Your free trial has ended. Choose a plan to keep creating galleries.</span>
+          <Link to="/admin/settings?tab=billing" className="sa-btn !py-2" data-testid="trial-upgrade">Upgrade now</Link>
+        </div>
+      )}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="font-display text-4xl">Galleries</h1>
           <p style={{ color: "var(--sa-muted)" }}>Welcome back to {tenant?.business_name}</p>
         </div>
-        <button className="sa-btn" onClick={() => setShowCreate(true)} data-testid="new-gallery-btn"><Plus size={18} /> New Gallery</button>
+        <button className="sa-btn" disabled={trialExpired} onClick={() => setShowCreate(true)} data-testid="new-gallery-btn"><Plus size={18} /> New Gallery</button>
       </div>
 
       {stats && (
