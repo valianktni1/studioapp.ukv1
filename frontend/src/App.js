@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/context/ThemeContext";
 
 import Landing from "@/pages/Landing";
 import AdminLogin from "@/pages/AdminLogin";
+import Signup from "@/pages/Signup";
 import AdminDashboard from "@/pages/AdminDashboard";
 import AdminGalleryDetail from "@/pages/AdminGalleryDetail";
 import AdminSettings from "@/pages/AdminSettings";
@@ -34,6 +35,7 @@ function App() {
             <Routes>
               <Route path="/" element={<Landing />} />
               <Route path="/login" element={<AdminLogin />} />
+              <Route path="/signup" element={<Signup />} />
               <Route path="/onboarding" element={<TenantOnboarding />} />
               <Route path="/admin" element={<Protected><AdminDashboard /></Protected>} />
               <Route path="/admin/gallery/:id" element={<Protected><AdminGalleryDetail /></Protected>} />

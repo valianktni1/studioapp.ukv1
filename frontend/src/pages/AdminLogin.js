@@ -47,6 +47,9 @@ export default function AdminLogin() {
             <button className="sa-btn w-full" disabled={busy} data-testid="login-submit"><LogIn size={18} />{busy ? "Signing in…" : "Sign in"}</button>
           </form>
           <p className="text-center text-sm mt-6" style={{ color: "var(--sa-muted)" }}>
+            New here? <Link to="/signup" className="underline" style={{ color: "var(--sa-gold)" }} data-testid="link-signup">Create a business account</Link>
+          </p>
+          <p className="text-center text-sm mt-2" style={{ color: "var(--sa-muted)" }}>
             Platform owner? <Link to="/super-admin" className="underline" style={{ color: "var(--sa-gold)" }} data-testid="link-super-admin">Super Admin</Link>
           </p>
         </div>

@@ -25,7 +25,7 @@ export default function Landing() {
           <nav className="flex items-center gap-3">
             <ThemeToggle />
             <Link to="/login" className="sa-btn-ghost" data-testid="nav-login">Photographer Login</Link>
-            <a href="#pricing" className="sa-btn" data-testid="nav-pricing">View Plans</a>
+            <Link to="/signup" className="sa-btn" data-testid="nav-pricing">Start your studio</Link>
           </nav>
         </div>
       </header>
@@ -44,9 +44,8 @@ export default function Landing() {
             StudioApp is the white-label home for your wedding photography &mdash; branded client galleries, video, backups and print orders, all in one elegant place.
           </motion.p>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.24 }} className="mt-9 flex flex-wrap gap-4">
-            <a href="#pricing" className="sa-btn" data-testid="hero-cta">Start your studio <ArrowRight size={18} /></a>
-            <Link to="/login" className="sa-btn-ghost" style={{ color: "#fff", borderColor: "rgba(255,255,255,0.5)" }} data-testid="hero-login">I already have an account</Link>
-          </motion.div>
+            <Link to="/signup" className="sa-btn" data-testid="hero-cta">Start your studio <ArrowRight size={18} /></Link>
+            <Link to="/login" className="sa-btn-ghost" style={{ color: "#fff", borderColor: "rgba(255,255,255,0.5)" }} data-testid="hero-login">I already have an account</Link>          </motion.div>
         </div>
       </section>
 
@@ -78,7 +77,7 @@ export default function Landing() {
               <h3 className="font-display text-3xl">{p.name}</h3>
               <div className="my-4"><span className="text-4xl font-bold">£{p.price}</span><span style={{ color: "var(--sa-muted)" }}>/mo</span></div>
               <p style={{ color: "var(--sa-muted)" }} className="mb-6">{p.galleries} &middot; unlimited photos &amp; video</p>
-              <Link to="/login" className={p.featured ? "sa-btn mt-auto" : "sa-btn-ghost mt-auto"} data-testid={`plan-cta-${p.name.toLowerCase()}`}>Choose {p.name}</Link>
+              <Link to={`/signup?plan=${p.name.toLowerCase()}`} className={p.featured ? "sa-btn mt-auto" : "sa-btn-ghost mt-auto"} data-testid={`plan-cta-${p.name.toLowerCase()}`}>Choose {p.name}</Link>
             </div>
           ))}
         </div>

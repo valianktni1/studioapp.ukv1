@@ -21,6 +21,13 @@ class PlanUpdate(BaseModel):
 
 
 # ---------- Tenant Auth ----------
+class RegisterRequest(BaseModel):
+    business_name: str
+    email: EmailStr
+    password: str
+    plan: str = "starter"
+
+
 class AdminLogin(BaseModel):
     email: EmailStr
     password: str

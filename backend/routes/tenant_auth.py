@@ -3,13 +3,43 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from db import db, PLANS
 from auth_utils import verify_password, hash_password, create_token, get_current_tenant, _clean
-from models import AdminLogin, PasswordChange, OnboardingData
+from models import RegisterRequest, AdminLogin, PasswordChange, OnboardingData
 
 router = APIRouter(prefix="/api/admin", tags=["tenant-auth"])
 
 
 def now_iso():
     return datetime.now(timezone.utc).isoformat()
+
+
+@router.post("/register")
+async def register(body: RegisterRequest):
+    import uuid
+    from routes.super_admin import make_unique_subdomain
+    email = body.email.lower()
+    if await db.admins.find_one({"email": email}):
+        raise HTTPException(status_code=400, detail="An account with this email already exists")
+    plan = body.plan if body.plan in PLANS else "starter"
+    tenant_id = str(uuid.uuid4())
+    subdomain = await make_unique_subdomain(body.business_name)
+    tenant = {
+        "id": tenant_id, "business_name": body.business_name, "email": email,
+        "subdomain": subdomain, "logo_url": None, "accent_color": "#D4AF37",
+        "secondary_color": "#0A0A0B", "phone": None, "website": None, "plan": plan,
+        "gallery_limit": PLANS[plan]["gallery_limit"], "storage_used_bytes": 0,
+        "subscription_status": "active", "stripe_customer_id": None,
+        "stripe_subscription_id": None, "suspended": False,
+        "onboarding_complete": False, "created_at": now_iso(),
+    }
+    await db.tenants.insert_one(tenant)
+    admin_id = str(uuid.uuid4())
+    await db.admins.insert_one({
+        "id": admin_id, "tenant_id": tenant_id, "email": email,
+        "password_hash": hash_password(body.password), "totp_secret": None,
+        "totp_enabled": False, "created_at": now_iso(),
+    })
+    token = create_token({"sub": admin_id, "role": "tenant_admin", "tenant_id": tenant_id})
+    return {"token": token, "role": "tenant_admin", "onboarding_complete": False, "tenant": _tenant_brand(tenant)}
 
 
 @router.post("/login")
