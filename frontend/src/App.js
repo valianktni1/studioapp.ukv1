@@ -41,7 +41,9 @@ function App() {
               <Route path="/admin/gallery/:id" element={<Protected><AdminGalleryDetail /></Protected>} />
               <Route path="/admin/settings" element={<Protected><AdminSettings /></Protected>} />
               <Route path="/super-admin" element={<SuperAdminLogin />} />
+              <Route path="/superadmin" element={<SuperAdminLogin />} />
               <Route path="/super-admin/dashboard" element={<SuperAdminDashboard />} />
+              <Route path="/superadmin/dashboard" element={<SuperAdminDashboard />} />
               <Route path="/s/:token" element={<ShareView />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
