@@ -100,3 +100,11 @@ body {
 
 @keyframes sa-pulse { 0%,100%{opacity:1;} 50%{opacity:.35;} }
 .sa-pulse { animation: sa-pulse 1.6s ease-in-out infinite; }
+
+/* --- Slideshow Ken Burns --- */
+@keyframes kb1 { from { transform: scale(1.05) translate(0,0); } to { transform: scale(1.18) translate(-2%,-2%); } }
+@keyframes kb2 { from { transform: scale(1.18) translate(2%,2%); } to { transform: scale(1.05) translate(0,0); } }
+@keyframes kb3 { from { transform: scale(1.06) translate(2%,-1%); } to { transform: scale(1.2) translate(-2%,2%); } }
+@keyframes kb4 { from { transform: scale(1.2) translate(-2%,0); } to { transform: scale(1.06) translate(2%,-2%); } }
+.kb { animation-duration: 9s; animation-timing-function: cubic-bezier(.4,0,.2,1); animation-fill-mode: forwards; }
+.kb1 { animation-name: kb1; } .kb2 { animation-name: kb2; } .kb3 { animation-name: kb3; } .kb4 { animation-name: kb4; }

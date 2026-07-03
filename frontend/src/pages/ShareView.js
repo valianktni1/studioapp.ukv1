@@ -2,9 +2,11 @@ import React, { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { Heart, Download, X, Sun, Moon, Upload, Lock, ChevronLeft, ChevronRight, ArrowLeft, ShoppingBag, Play, FolderOpen, Check, Image as ImageIcon } from "lucide-react";
-import { pub, API, mediaUrl, apiError } from "@/lib/api";
+import { Heart, Download, Sun, Moon, Upload, Lock, ArrowLeft, ShoppingBag, Play, FolderOpen, Check, Image as ImageIcon } from "lucide-react";
+import { pub, mediaUrl, apiError } from "@/lib/api";
 import useTitle from "@/lib/useTitle";
+import ShareLightbox from "@/components/ShareLightbox";
+import Slideshow from "@/components/Slideshow";
 
 const sid = (() => {
   let s = sessionStorage.getItem("sa_sid");
@@ -47,6 +49,8 @@ export default function ShareView() {
   const [favCount, setFavCount] = useState(0);
   const [grant, setGrant] = useState("");
   const [lightbox, setLightbox] = useState(null);
+  const [dl, setDl] = useState({});
+  const [slideshow, setSlideshow] = useState(false);
   const [light, setLight] = useState(() => localStorage.getItem("gallery_dark_mode") === "light");
   const guestInput = useRef();
 
@@ -101,7 +105,18 @@ export default function ShareView() {
     catch (err) { toast.error(apiError(err)); }
   };
 
-  const downloadFile = (f) => { window.open(`${API}/share/${token}/download/${f.id}?grant=${encodeURIComponent(grant)}`, "_blank"); };
+  const downloadFile = async (f) => {
+    setDl((p) => ({ ...p, [f.id]: 0 }));
+    try {
+      const res = await pub.get(`/share/${token}/download/${f.id}?grant=${encodeURIComponent(grant)}`, {
+        responseType: "blob",
+        onDownloadProgress: (e) => { if (e.total) setDl((p) => ({ ...p, [f.id]: Math.round((e.loaded / e.total) * 100) })); },
+      });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement("a"); a.href = url; a.download = f.filename; a.click(); URL.revokeObjectURL(url);
+    } catch (err) { toast.error(apiError(err)); }
+    finally { setDl((p) => { const n = { ...p }; delete n[f.id]; return n; }); }
+  };
   const downloadAll = async () => {
     toast.info("Preparing your ZIP…");
     try {
@@ -169,10 +184,13 @@ export default function ShareView() {
     ? data.files.filter((f) => favs[f.id])
     : data.files.filter((f) => f.subfolder === openAlbum);
   const idx = lightbox ? albumFiles.findIndex((f) => f.id === lightbox.id) : -1;
-  const navLb = (dir) => { const n = idx + dir; if (n >= 0 && n < albumFiles.length) setLightbox(albumFiles[n]); };
 
   const openPrints = () => toast.info("Print ordering is coming soon.");
-  const openSlideshow = () => toast.info("The cinematic slideshow is coming soon.");
+  const openSlideshow = () => {
+    const photos = albumFiles.filter((f) => f.file_type === "photo" && f.has_thumb);
+    if (!photos.length) return toast.info("No photos to show yet.");
+    setSlideshow(true);
+  };
 
   // ---------- LANDING ----------
   if (openAlbum === null) {
@@ -308,41 +326,63 @@ export default function ShareView() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+        <div className="columns-2 sm:columns-3 lg:columns-4" style={{ columnGap: "0.75rem" }}>
           {albumFiles.map((f, i) => (
             <motion.div key={f.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: Math.min(i * 0.02, 0.5) }}
-              className="sa-card overflow-hidden group relative cursor-pointer aspect-[4/5]" onClick={() => setLightbox(f)} data-testid={`share-file-${f.id}`}>
+              className="mb-3 break-inside-avoid rounded-lg overflow-hidden group relative cursor-pointer" style={{ border: "1px solid var(--sa-border)" }} onClick={() => setLightbox(f)} data-testid={`share-file-${f.id}`}>
               {f.file_type === "photo" && f.has_thumb
-                ? <img src={mediaUrl("thumb", data.gallery_id, f.subfolder_slug, f.filename)} alt="" loading="lazy" className="w-full h-full object-cover" style={{ objectPosition: "center 25%" }} />
+                ? <img src={mediaUrl("thumb", data.gallery_id, f.subfolder_slug, f.filename)} alt="" loading="lazy" className="w-full h-auto block" />
                 : f.file_type === "video"
-                  ? <div className="w-full h-full flex items-center justify-center" style={{ background: "#000" }}><Play size={28} color="#fff" /></div>
-                  : <div className="w-full h-full flex items-center justify-center text-xs" style={{ color: "var(--sa-muted)" }}>{f.file_type.toUpperCase()}</div>}
-              {logo && f.file_type === "photo" && <img src={logo} alt="" className="absolute bottom-1 right-1 pointer-events-none" style={{ width: 56, opacity: 0.7 }} />}
-              <button onClick={(e) => toggleFav(f, e)} className="absolute bottom-2 left-2 p-2 rounded-full" style={{ background: favs[f.id] ? accent : "rgba(255,255,255,0.9)" }} data-testid={`fav-${f.id}`}>
+                  ? <div className="w-full flex items-center justify-center aspect-[4/3]" style={{ background: "#000" }}><Play size={30} color="#fff" /></div>
+                  : <div className="w-full flex items-center justify-center aspect-[4/3] text-xs" style={{ color: "var(--sa-muted)" }}>{f.file_type.toUpperCase()}</div>}
+              {logo && f.file_type === "photo" && <img src={logo} alt="" className="absolute bottom-1.5 right-1.5 pointer-events-none select-none" style={{ width: 60, opacity: 0.7 }} />}
+              <button onClick={(e) => toggleFav(f, e)} className="absolute bottom-2 left-2 p-2 rounded-full transition-transform active:scale-95" style={{ background: favs[f.id] ? accent : "rgba(255,255,255,0.9)" }} data-testid={`fav-${f.id}`}>
                 <Heart size={15} fill={favs[f.id] ? "#fff" : "transparent"} color={favs[f.id] ? "#fff" : "#1a1a1a"} />
               </button>
+              {canDownload && f.file_type !== "video" && dl[f.id] == null && (
+                <button onClick={(e) => { e.stopPropagation(); downloadFile(f); }} className="absolute top-2 right-2 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: "rgba(0,0,0,0.55)" }} data-testid={`dl-${f.id}`}>
+                  <Download size={15} color="#fff" />
+                </button>
+              )}
+              {dl[f.id] != null && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2" style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(2px)" }} data-testid={`dl-progress-${f.id}`}>
+                  <Download size={22} color="#fff" className="animate-bounce" />
+                  <div className="w-2/3 h-1.5 rounded" style={{ background: "rgba(255,255,255,0.25)" }}><div className="h-full rounded" style={{ width: `${dl[f.id]}%`, background: accent }} /></div>
+                  <span className="text-xs" style={{ color: "#fff" }}>{dl[f.id]}%</span>
+                </div>
+              )}
             </motion.div>
           ))}
-          {albumFiles.length === 0 && <p className="col-span-full py-16 text-center" style={{ color: "var(--sa-muted)" }}>{isFavView ? "No favourites yet — tap the heart on the photos you love." : "No files here yet."}</p>}
+          {albumFiles.length === 0 && <p className="py-16 text-center" style={{ color: "var(--sa-muted)" }}>{isFavView ? "No favourites yet — tap the heart on the photos you love." : "No files here yet."}</p>}
         </div>
       </main>
 
       {lightbox && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: "rgba(0,0,0,0.95)" }} onClick={() => setLightbox(null)} data-testid="lightbox">
-          <button className="absolute top-5 right-5 text-white p-2" onClick={() => setLightbox(null)}><X size={24} /></button>
-          {idx > 0 && <button className="absolute left-4 text-white p-2" onClick={(e) => { e.stopPropagation(); navLb(-1); }}><ChevronLeft size={30} /></button>}
-          {idx < albumFiles.length - 1 && <button className="absolute right-4 text-white p-2" onClick={(e) => { e.stopPropagation(); navLb(1); }}><ChevronRight size={30} /></button>}
-          <motion.div key={lightbox.id} initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} className="relative max-w-5xl max-h-[85vh] px-4" onClick={(e) => e.stopPropagation()}>
-            {lightbox.file_type === "photo"
-              ? <img src={mediaUrl("preview", data.gallery_id, lightbox.subfolder_slug, lightbox.filename)} alt="" className="max-h-[85vh] w-auto mx-auto" />
-              : <video src={`${API}/media/original/${data.gallery_id}/${lightbox.subfolder_slug}/${encodeURIComponent(lightbox.filename)}`} controls autoPlay className="max-h-[85vh]" />}
-            {logo && lightbox.file_type === "photo" && <img src={logo} alt="" className="absolute bottom-16 right-6 pointer-events-none" style={{ width: 100, opacity: 0.45 }} />}
-            <div className="flex items-center justify-center gap-3 mt-4">
-              <button className="sa-btn-ghost" style={{ color: "#fff", borderColor: "rgba(255,255,255,0.4)" }} onClick={() => toggleFav(lightbox)} data-testid="lb-fav"><Heart size={16} fill={favs[lightbox.id] ? accent : "transparent"} color={accent} /> Favourite</button>
-              {canDownload && <button className="sa-btn" style={{ background: accent }} onClick={() => downloadFile(lightbox)} data-testid="lb-download"><Download size={16} /> Download</button>}
-            </div>
-          </motion.div>
-        </div>
+        <ShareLightbox
+          galleryId={data.gallery_id}
+          files={albumFiles}
+          current={lightbox}
+          onClose={() => setLightbox(null)}
+          onNav={(dir) => { const n = idx + dir; if (n >= 0 && n < albumFiles.length) setLightbox(albumFiles[n]); }}
+          accent={accent}
+          logo={logo}
+          canDownload={canDownload}
+          faved={!!favs[lightbox.id]}
+          onFav={toggleFav}
+          onDownload={downloadFile}
+          dlPercent={dl[lightbox.id]}
+        />
+      )}
+
+      {slideshow && (
+        <Slideshow
+          galleryId={data.gallery_id}
+          photos={albumFiles.filter((f) => f.file_type === "photo" && f.has_thumb)}
+          couple={couple}
+          brand={brand}
+          accent={accent}
+          onClose={() => setSlideshow(false)}
+        />
       )}
 
       <footer className="studio-footer">Site Designed &amp; Hosted by <span style={{ color: accent, fontWeight: 700 }}>StudioApp</span></footer>
