@@ -127,6 +127,8 @@ async def update_branding(body: OnboardingData, ctx=Depends(get_current_tenant))
         "accent_color": body.accent_color,
         "secondary_color": body.secondary_color,
     }.items() if v is not None}
+    if body.contact_email:
+        updates["email"] = body.contact_email.lower()
     await db.tenants.update_one({"id": ctx["tenant_id"]}, {"$set": updates})
     t = await db.tenants.find_one({"id": ctx["tenant_id"]})
     return _tenant_brand(t)

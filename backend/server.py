@@ -7,7 +7,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from db import db, PLANS
 from auth_utils import hash_password, verify_password
-from routes import super_admin, tenant_auth, galleries, shares, public_share, billing
+from routes import super_admin, tenant_auth, galleries, shares, public_share, billing, email
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("studioapp")
@@ -31,6 +31,7 @@ app.include_router(galleries.router)
 app.include_router(shares.router)
 app.include_router(public_share.router)
 app.include_router(billing.router)
+app.include_router(email.router)
 
 app.add_middleware(
     CORSMiddleware,

@@ -12,8 +12,10 @@ export default function AdminSettings() {
   useTitle("Settings");
   const [params, setParams] = useSearchParams();
   const [tab, setTab] = useState(params.get("tab") || "branding");
-  const [brand, setBrand] = useState({ business_name: "", phone: "", website: "", logo_url: "", accent_color: "#D4AF37", secondary_color: "#0A0A0B" });
+  const [brand, setBrand] = useState({ business_name: "", contact_email: "", phone: "", website: "", logo_url: "", accent_color: "#D4AF37", secondary_color: "#0A0A0B" });
   const [pw, setPw] = useState({ current_password: "", new_password: "" });
+  const [smtp, setSmtp] = useState({ smtp_host: "", smtp_port: 587, smtp_email: "", sender_name: "", smtp_password: "" });
+  const [testTo, setTestTo] = useState("");
   const [plans, setPlans] = useState({});
   const [billingBusy, setBillingBusy] = useState("");
 
