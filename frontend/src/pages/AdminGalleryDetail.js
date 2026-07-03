@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Upload, Trash2, Link2, Plus, Copy, Power, Star, Loader2, Mail } from "lucide-react";
+import { ArrowLeft, Upload, Trash2, Link2, Plus, Copy, Power, Star, Loader2, Mail, QrCode } from "lucide-react";
 import AdminShell from "@/components/AdminShell";
 import { tenantApi, mediaUrl, apiError, formatBytes } from "@/lib/api";
 import useTitle from "@/lib/useTitle";
@@ -20,6 +20,10 @@ export default function AdminGalleryDetail() {
   const [showNotify, setShowNotify] = useState(false);
   const [notify, setNotify] = useState({ to: "", share_url: "", password: "", message: "" });
   const [notifyBusy, setNotifyBusy] = useState(false);
+  const [qrOpen, setQrOpen] = useState(null);
+  const [qrBusy, setQrBusy] = useState(false);
+  const [templates, setTemplates] = useState([]);
+  const [tplId, setTplId] = useState("");
   const fileInput = useRef();
 
   const load = useCallback(async () => {
@@ -82,23 +86,39 @@ export default function AdminGalleryDetail() {
   };
 
   const copyLink = (s) => {
-    const url = `${window.location.origin}/s/${s.custom_slug || s.token}`;
-    navigator.clipboard.writeText(url); toast.success("Link copied");
+    const url = `${window.location.origin}/s/${s.custom_slug || s.token}`;    navigator.clipboard.writeText(url); toast.success("Link copied");
   };
   const toggleShare = async (s) => { try { await tenantApi.put(`/admin/shares/${s.id}/toggle`); loadShares(); } catch (err) { toast.error(apiError(err)); } };
   const delShare = async (s) => { if (!window.confirm("Delete this link?")) return; try { await tenantApi.delete(`/admin/shares/${s.id}`); loadShares(); } catch (err) { toast.error(apiError(err)); } };
+
+  const downloadQr = async (s, design) => {
+    setQrBusy(true);
+    try {
+      const res = await tenantApi.get(`/admin/shares/${s.id}/qr-pdf?design=${design}`, { responseType: "blob" });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement("a"); a.href = url; a.download = `gallery-qr-${design}.pdf`; a.click(); URL.revokeObjectURL(url);
+      toast.success(`${design} QR PDF downloaded`);
+    } catch (err) { toast.error(apiError(err)); }
+    finally { setQrBusy(false); }
+  };
 
   const openNotify = () => {
     const first = shares.find((s) => s.is_active) || shares[0];
     const url = first ? `${window.location.origin}/s/${first.custom_slug || first.token}` : "";
     setNotify({ to: gallery.client_email || "", share_url: url, password: "", message: "" });
+    setTplId("");
+    tenantApi.get("/admin/email-templates").then(({ data }) => setTemplates(data || [])).catch(() => {});
     setShowNotify(true);
   };
   const sendNotify = async (e) => {
     e.preventDefault();
     setNotifyBusy(true);
     try {
-      await tenantApi.post(`/admin/galleries/${id}/notify`, notify);
+      if (tplId) {
+        await tenantApi.post(`/admin/galleries/${id}/send-template`, { template_id: tplId, to: notify.to, share_url: notify.share_url, password: notify.password });
+      } else {
+        await tenantApi.post(`/admin/galleries/${id}/notify`, notify);
+      }
       toast.success(`Email sent to ${notify.to}`); setShowNotify(false);
     } catch (err) { toast.error(apiError(err)); }
     finally { setNotifyBusy(false); }
@@ -128,17 +148,28 @@ export default function AdminGalleryDetail() {
           <span className="sa-label">Share links</span>
           <div className="mt-3 space-y-2">
             {shares.map((s) => (
-              <div key={s.id} className="flex items-center justify-between text-sm py-2" style={{ borderBottom: "1px solid var(--sa-border)" }} data-testid={`share-row-${s.id}`}>
-                <div>
-                  <span className="font-medium">{s.label || (s.guest_upload_mode ? "Guest Upload Link" : "Gallery Link")}</span>
-                  <span style={{ color: "var(--sa-muted)" }}> &middot; {s.access_level}{s.has_password ? " · password" : ""}{s.expires_at ? ` · expires ${s.expires_at.slice(0,10)}` : ""}</span>
-                  <span className="ml-2 text-xs" style={{ color: s.is_active ? "#4ade80" : "#f87171" }}>{s.is_active ? "active" : "inactive"}</span>
+              <div key={s.id} className="py-2" style={{ borderBottom: "1px solid var(--sa-border)" }} data-testid={`share-row-${s.id}`}>
+                <div className="flex items-center justify-between text-sm">
+                  <div>
+                    <span className="font-medium">{s.label || (s.guest_upload_mode ? "Guest Upload Link" : "Gallery Link")}</span>
+                    <span style={{ color: "var(--sa-muted)" }}> &middot; {s.access_level}{s.has_password ? " · password" : ""}{s.expires_at ? ` · expires ${s.expires_at.slice(0,10)}` : ""}</span>
+                    <span className="ml-2 text-xs" style={{ color: s.is_active ? "#4ade80" : "#f87171" }}>{s.is_active ? "active" : "inactive"}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button className="sa-btn-ghost !p-2" onClick={() => setQrOpen(qrOpen === s.id ? null : s.id)} data-testid={`qr-${s.id}`}><QrCode size={14} /></button>
+                    <button className="sa-btn-ghost !p-2" onClick={() => copyLink(s)} data-testid={`copy-${s.id}`}><Copy size={14} /></button>
+                    <button className="sa-btn-ghost !p-2" onClick={() => toggleShare(s)} data-testid={`toggle-${s.id}`}><Power size={14} /></button>
+                    <button className="sa-btn-ghost !p-2" onClick={() => delShare(s)}><Trash2 size={14} color="#f87171" /></button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button className="sa-btn-ghost !p-2" onClick={() => copyLink(s)} data-testid={`copy-${s.id}`}><Copy size={14} /></button>
-                  <button className="sa-btn-ghost !p-2" onClick={() => toggleShare(s)} data-testid={`toggle-${s.id}`}><Power size={14} /></button>
-                  <button className="sa-btn-ghost !p-2" onClick={() => delShare(s)}><Trash2 size={14} color="#f87171" /></button>
-                </div>
+                {qrOpen === s.id && (
+                  <div className="flex items-center gap-2 mt-2" data-testid={`qr-menu-${s.id}`}>
+                    <span className="text-xs" style={{ color: "var(--sa-muted)" }}>QR PDF:</span>
+                    {["minimal", "classic", "botanical"].map((dz) => (
+                      <button key={dz} className="sa-btn-ghost !py-1 !px-3 !text-xs capitalize" disabled={qrBusy} onClick={() => downloadQr(s, dz)} data-testid={`qr-${dz}-${s.id}`}>{dz}</button>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -219,6 +250,14 @@ export default function AdminGalleryDetail() {
           <form onClick={(e) => e.stopPropagation()} onSubmit={sendNotify} className="sa-card p-8 w-full max-w-md space-y-4" data-testid="notify-modal">
             <h3 className="font-display text-2xl">Notify Client</h3>
             <p className="text-sm" style={{ color: "var(--sa-muted)" }}>Send a branded "your gallery is ready" email.</p>
+            {templates.length > 0 && (
+              <div><label className="sa-label block mb-2">Template</label>
+                <select className="sa-input" value={tplId} onChange={(e) => setTplId(e.target.value)} data-testid="nf-template">
+                  <option value="">Default "gallery ready" email</option>
+                  {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+            )}
             <div><label className="sa-label block mb-2">Client email</label><input type="email" className="sa-input" value={notify.to} onChange={(e) => setNotify({ ...notify, to: e.target.value })} required placeholder="couple@example.com" data-testid="nf-to" /></div>
             <div><label className="sa-label block mb-2">Share link</label>
               <select className="sa-input" value={notify.share_url} onChange={(e) => setNotify({ ...notify, share_url: e.target.value })} data-testid="nf-share">

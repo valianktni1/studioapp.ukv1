@@ -58,6 +58,19 @@ export default function AdminSettings() {
 
   const [smtpBusy, setSmtpBusy] = useState(false);
   const [smtpHasPw, setSmtpHasPw] = useState(false);
+  const [templates, setTemplates] = useState([]);
+  const [tpl, setTpl] = useState({ id: "", name: "", subject: "", body: "" });
+  const loadTemplates = () => tenantApi.get("/admin/email-templates").then(({ data }) => setTemplates(data || [])).catch(() => {});
+  useEffect(() => { if (tab === "email") loadTemplates(); }, [tab]);
+  const saveTpl = async (e) => {
+    e.preventDefault();
+    try {
+      if (tpl.id) await tenantApi.put(`/admin/email-templates/${tpl.id}`, tpl);
+      else await tenantApi.post("/admin/email-templates", tpl);
+      toast.success("Template saved"); setTpl({ id: "", name: "", subject: "", body: "" }); loadTemplates();
+    } catch (err) { toast.error(apiError(err)); }
+  };
+  const delTpl = async (t) => { try { await tenantApi.delete(`/admin/email-templates/${t.id}`); loadTemplates(); if (tpl.id === t.id) setTpl({ id: "", name: "", subject: "", body: "" }); } catch (err) { toast.error(apiError(err)); } };
   useEffect(() => {
     tenantApi.get("/admin/settings/smtp").then(({ data }) => {
       setSmtp({ smtp_host: data.smtp_host || "", smtp_port: data.smtp_port || 587, smtp_email: data.smtp_email || "", sender_name: data.sender_name || "", smtp_password: "" });
@@ -178,6 +191,7 @@ export default function AdminSettings() {
       )}
 
       {tab === "email" && (
+        <>
         <form onSubmit={saveSmtp} className="sa-card p-8 max-w-xl space-y-5" data-testid="smtp-form">
           <div>
             <h3 className="font-display text-2xl mb-1">Email (SMTP)</h3>
@@ -201,6 +215,34 @@ export default function AdminSettings() {
             </div>
           </div>
         </form>
+
+        <div className="sa-card p-8 max-w-2xl mt-8" data-testid="templates-card">
+          <h3 className="font-display text-2xl mb-1">Email Templates</h3>
+          <p className="text-sm mb-5" style={{ color: "var(--sa-muted)" }}>Reusable messages. Use <code>{"{couple_name}"}</code>, <code>{"{gallery_link}"}</code> and <code>{"{password}"}</code> — they're filled in automatically when you send from a gallery.</p>
+          {templates.length > 0 && (
+            <div className="space-y-2 mb-6">
+              {templates.map((t) => (
+                <div key={t.id} className="flex items-center justify-between p-3 rounded" style={{ border: "1px solid var(--sa-border)" }} data-testid={`tpl-${t.id}`}>
+                  <div><div className="font-medium">{t.name}</div><div className="text-xs" style={{ color: "var(--sa-muted)" }}>{t.subject}</div></div>
+                  <div className="flex gap-2">
+                    <button className="sa-btn-ghost !py-1 !px-3 !text-xs" onClick={() => setTpl(t)} data-testid={`tpl-edit-${t.id}`}>Edit</button>
+                    <button className="sa-btn-ghost !py-1 !px-3 !text-xs" style={{ color: "#f87171" }} onClick={() => delTpl(t)} data-testid={`tpl-del-${t.id}`}>Delete</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <form onSubmit={saveTpl} className="space-y-3">
+            <input className="sa-input" placeholder="Template name" value={tpl.name} onChange={(e) => setTpl({ ...tpl, name: e.target.value })} required data-testid="tpl-name" />
+            <input className="sa-input" placeholder="Subject (e.g. Your photos are ready, {couple_name}!)" value={tpl.subject} onChange={(e) => setTpl({ ...tpl, subject: e.target.value })} data-testid="tpl-subject" />
+            <textarea className="sa-input" rows={5} placeholder="Message body… use {gallery_link} and {password}" value={tpl.body} onChange={(e) => setTpl({ ...tpl, body: e.target.value })} data-testid="tpl-body" />
+            <div className="flex gap-3">
+              <button className="sa-btn" data-testid="tpl-save">{tpl.id ? "Update template" : "Add template"}</button>
+              {tpl.id && <button type="button" className="sa-btn-ghost" onClick={() => setTpl({ id: "", name: "", subject: "", body: "" })}>Cancel</button>}
+            </div>
+          </form>
+        </div>
+        </>
       )}
 
       {tab === "twofa" && (
@@ -218,7 +260,7 @@ export default function AdminSettings() {
               {sizes.map((s, i) => (
                 <div key={s.id || i} className="grid grid-cols-12 gap-2 items-center" data-testid={`size-row-${i}`}>
                   <input className="sa-input col-span-4" placeholder="Label (e.g. 8x10)" value={s.label} onChange={(e) => setSizes((p) => p.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} data-testid={`size-label-${i}`} />
-                  <input className="sa-input col-span-4" placeholder="Dimensions (e.g. 8in x 10in)" value={s.dimensions} onChange={(e) => setSizes((p) => p.map((x, j) => j === i ? { ...x, dimensions: e.target.value } : x))} />
+                  <input className="sa-input col-span-4" placeholder="Dimensions (e.g. 8in x 10in)" value={s.dimensions} onChange={(e) => setSizes((p) => p.map((x, j) => j === i ? { ...x, dimensions: e.target.value } : x))} data-testid={`size-dim-${i}`} />
                   <input type="number" step="0.01" className="sa-input col-span-3" placeholder="Price" value={s.price} onChange={(e) => setSizes((p) => p.map((x, j) => j === i ? { ...x, price: e.target.value } : x))} data-testid={`size-price-${i}`} />
                   <button className="col-span-1 text-center" onClick={() => setSizes((p) => p.filter((_, j) => j !== i))} data-testid={`size-remove-${i}`} style={{ color: "#f87171" }}>✕</button>
                 </div>

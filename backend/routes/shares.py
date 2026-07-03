@@ -1,3 +1,4 @@
+import os
 import uuid
 import secrets
 from datetime import datetime, timezone
@@ -91,3 +92,24 @@ async def set_expiry(sid: str, payload: dict, ctx=Depends(get_current_tenant)):
     await db.shares.update_one({"id": sid, "tenant_id": ctx["tenant_id"]},
                                {"$set": {"expires_at": payload.get("expires_at"), "expiry_reminder_sent": False}})
     return {"ok": True}
+
+
+@router.get("/shares/{sid}/qr-pdf")
+async def share_qr_pdf(sid: str, design: str = "minimal", ctx=Depends(get_current_tenant)):
+    from fastapi.responses import StreamingResponse
+    from qr_pdf import build_qr_pdf
+    from media import parse_couple_name
+    s = await db.shares.find_one({"id": sid, "tenant_id": ctx["tenant_id"]})
+    if not s:
+        raise HTTPException(status_code=404, detail="Share not found")
+    g = await db.galleries.find_one({"id": s["gallery_id"]})
+    t = await db.tenants.find_one({"id": ctx["tenant_id"]})
+    base = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+    url = f"{base}/s/{s.get('custom_slug') or s['token']}"
+    couple = parse_couple_name(g["folder_name"]) if g else "Your Gallery"
+    brand = (t or {}).get("business_name", "Gallery")
+    if design not in ("minimal", "classic", "botanical"):
+        design = "minimal"
+    buf = build_qr_pdf(url, couple, brand, design)
+    return StreamingResponse(buf, media_type="application/pdf",
+                             headers={"Content-Disposition": f'attachment; filename="gallery-qr-{design}.pdf"'})

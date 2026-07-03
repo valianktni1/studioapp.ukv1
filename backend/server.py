@@ -122,6 +122,21 @@ async def startup():
     except Exception as e:
         logger.error("Object storage init failed: %s", e)
 
+    import asyncio
+    from routes.email import run_expiry_reminders
+
+    async def _expiry_loop():
+        while True:
+            try:
+                n = await run_expiry_reminders()
+                if n:
+                    logger.info("Sent %s expiry reminder(s)", n)
+            except Exception as e:
+                logger.error("Expiry reminder job failed: %s", e)
+            await asyncio.sleep(3600)
+
+    asyncio.create_task(_expiry_loop())
+
 
 @app.on_event("shutdown")
 async def shutdown():

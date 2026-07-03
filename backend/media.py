@@ -112,6 +112,14 @@ def backup_gallery_dir(tenant_id: str, gallery_folder: str) -> Path:
     return BACKUP_DIR / tenant_id / gallery_folder
 
 
+def parse_couple_name(folder_name: str) -> str:
+    """Strip a trailing date (e.g. 'Eva & Ella 27.06.26' -> 'Eva & Ella')."""
+    if not folder_name:
+        return ""
+    cleaned = re.sub(r"\s*[-\u2013\u2014]?\s*(\d{1,2}[./-]\d{1,2}([./-]\d{2,4})?|\d{4})\s*$", "", folder_name).strip()
+    return cleaned or folder_name
+
+
 # ---------------- Video pipeline (runs on the user's TrueNAS with ffmpeg + AMD 780M VAAPI) ----------------
 def _db():
     from pymongo import MongoClient
