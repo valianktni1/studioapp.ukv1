@@ -198,6 +198,9 @@ def transcode_web(gallery_id, tenant_id, subfolder_slug, filename, src_path):
             if dst.exists() and dst.stat().st_size > 0:
                 logger.info("transcoded %s via %s", filename, "GPU (VAAPI/780M)" if use_vaapi else "CPU (libx264)")
                 return True
+        except subprocess.CalledProcessError as e:
+            err = e.stderr.decode("utf-8", "ignore")[-1000:] if isinstance(e.stderr, (bytes, bytearray)) else str(e.stderr)
+            logger.warning("transcode (%s) failed for %s: %s", "vaapi" if use_vaapi else "cpu", filename, err)
         except Exception as e:
             logger.warning("transcode (%s) failed for %s: %s", "vaapi" if use_vaapi else "cpu", filename, e)
     return False
