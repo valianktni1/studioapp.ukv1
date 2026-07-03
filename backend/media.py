@@ -177,9 +177,10 @@ def ensure_video_faststart(src_path):
 
 def _transcode_cmd(src, dst, use_vaapi):
     if use_vaapi:
-        return [FFMPEG, "-y", "-hwaccel", "vaapi", "-hwaccel_output_format", "vaapi",
-                "-vaapi_device", VAAPI_DEVICE, "-i", str(src),
-                "-vf", "scale_vaapi=w=-2:h=1080:format=nv12", "-c:v", "h264_vaapi", "-b:v", "5M",
+        # Decode on CPU, upload frames to the AMD 780M, scale + H.264 encode on the GPU (VAAPI).
+        # The hwupload chain is robust across any source codec, unlike full -hwaccel decode.
+        return [FFMPEG, "-y", "-vaapi_device", VAAPI_DEVICE, "-i", str(src),
+                "-vf", "format=nv12,hwupload,scale_vaapi=w=-2:h=1080", "-c:v", "h264_vaapi", "-b:v", "5M",
                 "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(dst)]
     return [FFMPEG, "-y", "-i", str(src), "-vf", "scale=-2:1080", "-c:v", "libx264", "-preset", "medium",
             "-b:v", "5M", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(dst)]
@@ -195,6 +196,7 @@ def transcode_web(gallery_id, tenant_id, subfolder_slug, filename, src_path):
         try:
             subprocess.run(_transcode_cmd(src, dst, use_vaapi), capture_output=True, timeout=7200, check=True)
             if dst.exists() and dst.stat().st_size > 0:
+                logger.info("transcoded %s via %s", filename, "GPU (VAAPI/780M)" if use_vaapi else "CPU (libx264)")
                 return True
         except Exception as e:
             logger.warning("transcode (%s) failed for %s: %s", "vaapi" if use_vaapi else "cpu", filename, e)

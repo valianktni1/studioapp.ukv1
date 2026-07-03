@@ -4,6 +4,7 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg libmagic1 curl \
+    mesa-va-drivers libva2 libva-drm2 vainfo \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
