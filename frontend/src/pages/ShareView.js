@@ -186,7 +186,10 @@ export default function ShareView() {
   };
   const coverUrl = (sf, kind = "preview") => {
     const f = coverFileFor(sf);
-    return f && f.file_type === "photo" ? mediaUrl(kind, data.gallery_id, f.subfolder_slug, f.filename) : null;
+    if (!f) return null;
+    if (f.file_type === "photo") return mediaUrl(kind, data.gallery_id, f.subfolder_slug, f.filename);
+    if (f.file_type === "video" && f.has_thumb) return mediaUrl(kind, data.gallery_id, f.subfolder_slug, f.filename);
+    return null;
   };
   const countIn = (sf) => data.files.filter((f) => f.subfolder === sf).length;
 
@@ -352,7 +355,12 @@ export default function ShareView() {
               {f.file_type === "photo" && f.has_thumb
                 ? <img src={mediaUrl("thumb", data.gallery_id, f.subfolder_slug, f.filename)} alt="" loading="lazy" className="w-full h-auto block" />
                 : f.file_type === "video"
-                  ? <div className="w-full flex items-center justify-center aspect-[4/3]" style={{ background: "#000" }}><Play size={30} color="#fff" /></div>
+                  ? <div className="relative w-full aspect-[4/3]" style={{ background: "#000" }}>
+                      {f.has_thumb && <img src={mediaUrl("thumb", data.gallery_id, f.subfolder_slug, f.filename)} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover" />}
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <span className="flex items-center justify-center rounded-full" style={{ width: 48, height: 48, background: "rgba(0,0,0,0.5)" }}><Play size={22} color="#fff" fill="#fff" /></span>
+                      </div>
+                    </div>
                   : <div className="w-full flex items-center justify-center aspect-[4/3] text-xs" style={{ color: "var(--sa-muted)" }}>{f.file_type.toUpperCase()}</div>}
               {logo && f.file_type === "photo" && <img src={logo} alt="" className="absolute bottom-1.5 right-1.5 pointer-events-none select-none" style={{ width: 60, opacity: 0.7 }} />}
               <button onClick={(e) => toggleFav(f, e)} className="absolute bottom-2 left-2 p-2 rounded-full transition-transform active:scale-95" style={{ background: favs[f.id] ? accent : "rgba(255,255,255,0.9)" }} data-testid={`fav-${f.id}`}>

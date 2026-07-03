@@ -337,6 +337,8 @@ async def media_thumb(gallery_id: str, subfolder_slug: str, filename: str):
         f = await _find_file(gallery_id, filename, subfolder_slug)
         if not f:
             raise HTTPException(status_code=404, detail="Not found")
+        if f.get("file_type") == "video":
+            raise HTTPException(status_code=404, detail="Poster not ready")
         src = gallery_dir(f["tenant_id"], gallery_id, subfolder_slug) / filename
         generate_image_derivatives(gallery_id, subfolder_slug, filename, str(src))
     if not thumb.exists():
@@ -352,6 +354,8 @@ async def media_preview(gallery_id: str, subfolder_slug: str, filename: str):
         f = await _find_file(gallery_id, filename, subfolder_slug)
         if not f:
             raise HTTPException(status_code=404, detail="Not found")
+        if f.get("file_type") == "video":
+            raise HTTPException(status_code=404, detail="Poster not ready")
         src = gallery_dir(f["tenant_id"], gallery_id, subfolder_slug) / filename
         generate_image_derivatives(gallery_id, subfolder_slug, filename, str(src))
     if not preview.exists():
