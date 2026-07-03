@@ -1,0 +1,40 @@
+{
+  "summary": "Full proactive regression across auth/onboarding, super-admin (CRUD, trial extend/comp, PayPal config), tenant gallery mgmt (create/upload/shares/QR PDF/notify), gallery-limit 402, tenant settings (prints, SMTP, templates, orders), public share (meta/access/favourite/single-download/streaming ZIP/print-order manual), plus UI regression on Public Share (landing hero, album view, lightbox, Order Prints modal, Slideshow with music picker, theme toggle, session persistence, super-admin console). Backend: 28/28 pytest pass in 9s. Frontend: no console errors, no crashes. Every major flow works. Cleanup verified — no leftover TEST_/qa+ tenants, shares, galleries, orders, or templates.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AdminSettings (Billing tab)", "issue": "Stale marketing text 'Secure card payments via Stripe. PayPal coming soon.' — PayPal is now a fully-shipped feature (super-admin config + /share/{token}/print-order + capture flow). Text is misleading for photographers.", "selector": "AdminSettings.js:181", "priority": "LOW"},
+      {"component": "PrintOrderModal", "issue": "Modal does not close on Escape key (only backdrop click / X). Inconsistent with ShareLightbox/Slideshow which honour Escape.", "selector": "[data-testid=\"print-modal\"]", "priority": "LOW"},
+      {"component": "ShareLightbox", "issue": "Prev/next chevron buttons lack data-testid — makes progressive-lightbox navigation hard to assert in automated tests (keyboard-only fallback works).", "selector": "ShareLightbox.js:61-62", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Super Admin Dashboard", "issues": ["Two rows named 'Demo Studio' with mismatched admin emails: 'newmail@example.com' (2/30) and 'demo@studioapp.uk' (5/30). The documented login credential 'demo@studio-app.uk' (with hyphen) does not visibly correspond to either tenant.email shown here — login still works because auth queries the admins collection. Data-hygiene / dedup opportunity before production."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_12_regression.py",
+    "/app/test_reports/pytest/iter12.xml"
+  ],
+  "action_items": [
+    "Remove or replace 'PayPal coming soon' copy in AdminSettings.js (Billing tab) — the feature is live.",
+    "Add data-testid=lb-prev and data-testid=lb-next to ShareLightbox chevron buttons (small testability win).",
+    "Add Escape-to-close handler in PrintOrderModal for consistency with other modals.",
+    "(Data hygiene) Merge/rename the duplicate 'Demo Studio' tenants and confirm demo@studio-app.uk is set as tenant.email on the correct row so super-admin listing matches the documented login credential."
+  ],
+  "critical_code_review_comments": [
+    "public_share._require_download_access() still only enforces JWT grant when has_password=true; for public download-enabled shares any grant is accepted (link IS the auth). Confirm this is intentional before prod (already flagged in iter 11).",
+    "orders.py _pp_create / _pp_capture use synchronous requests.post inside run_in_threadpool — OK, but there is no retry/backoff and no PayPal webhook handler; capture depends on user hitting return_url. For production, add a webhook or reconciliation job.",
+    "email._send raises HTTPException even from run_expiry_reminders — caught silently by generic except (never retried, no failure log). Consider structured logging so tenants can see why reminders didn't go out.",
+    "galleries.upload_files reads the entire file body into memory (await uf.read()) — fine for a few MB but risky for the 500MB videos referenced elsewhere. Consider chunked writes.",
+    "storage_client + logo upload path: uploads.py builds logo_url via resolve_public_base() at write time. If PUBLIC_BASE_URL is unset the URL becomes '/api/public/asset/<id>' (relative). Guard against empty base like the expiry reminder does."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration_12_regression.py"],
+  "success_rate": {"backend": "100% (28/28)", "frontend": "100% (all screens loaded, 0 console errors)"},
+  "test_credentials": "Super admin: superadmin / Stu!d10App_2026xQ. Demo tenant: demo@studio-app.uk / Demo!2026. Public share: /s/eva-ella-27-06-26 (open, download access, 6 files).",
+  "seed_data_creation": "Test creates: 3 tenants (TEST_Pro, TEST_Signup, TEST_Limit) via super-admin + register endpoints, 1 gallery + 1 photo + 2 shares under demo tenant, 1 email template, 1 print size, 1 manual print order. ALL cleaned up in teardown (verified via direct Mongo count).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 12 = broad proactive regression. Test file /app/backend/tests/test_iteration_12_regression.py (28 tests). Uses REACT_APP_BACKEND_URL from env with fallback to reading /app/frontend/.env. PayPal config is cleared to empty after TestSuperAdmin.test_paypal_config_masks_secret so downstream print-order tests exercise the manual (paypal=false, status=awaiting_contact) path. Run: pytest tests/test_iteration_12_regression.py -o addopts=''.",
+  "rca of the issue": "No production bug — this was proactive regression. Only cosmetic / testability findings surfaced. All critical flows (auth, gallery CRUD, share links, QR PDF, streaming ZIP, favourites, prints modal, super-admin) verified end-to-end."
+}
