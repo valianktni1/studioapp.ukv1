@@ -5,6 +5,7 @@ import { ArrowRight } from "lucide-react";
 import { pub, TENANT_TOKEN_KEY, apiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import Footer from "@/components/Footer";
+import useTitle from "@/lib/useTitle";
 
 const PLAN_LABELS = { starter: "Starter · £15/mo · 10 galleries", professional: "Professional · £35/mo · 30 galleries", studio: "Studio · £65/mo · 60 galleries" };
 
@@ -17,6 +18,7 @@ export default function Signup() {
     plan: ["starter", "professional", "studio"].includes(params.get("plan")) ? params.get("plan") : "starter",
   });
   const [busy, setBusy] = useState(false);
+  useTitle("Create Account");
 
   const submit = async (e) => {
     e.preventDefault();

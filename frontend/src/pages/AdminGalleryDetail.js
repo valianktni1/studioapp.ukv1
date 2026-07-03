@@ -4,12 +4,14 @@ import { toast } from "sonner";
 import { ArrowLeft, Upload, Trash2, Link2, Plus, Copy, Power, Star, Loader2 } from "lucide-react";
 import AdminShell from "@/components/AdminShell";
 import { tenantApi, mediaUrl, apiError, formatBytes } from "@/lib/api";
+import useTitle from "@/lib/useTitle";
 
 const slugify = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "folder";
 
 export default function AdminGalleryDetail() {
   const { id } = useParams();
   const [gallery, setGallery] = useState(null);
+  useTitle(gallery?.folder_name || "Gallery");
   const [active, setActive] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [shares, setShares] = useState([]);

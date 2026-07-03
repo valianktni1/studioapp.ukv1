@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Heart, Download, X, Sun, Moon, Upload, Lock, Send, ChevronLeft, ChevronRight } from "lucide-react";
 import { pub, API, mediaUrl, apiError } from "@/lib/api";
+import useTitle from "@/lib/useTitle";
 
 const sid = (() => {
   let s = sessionStorage.getItem("sa_sid");
@@ -20,6 +21,7 @@ export default function ShareView() {
   const { token } = useParams();
   const [meta, setMeta] = useState(null);
   const [data, setData] = useState(null);
+  useTitle(data?.gallery_name || meta?.gallery_name || "Gallery");
   const [password, setPassword] = useState("");
   const [needPw, setNeedPw] = useState(false);
   const [error, setError] = useState("");

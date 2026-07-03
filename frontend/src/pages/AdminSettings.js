@@ -5,9 +5,11 @@ import { Check } from "lucide-react";
 import AdminShell from "@/components/AdminShell";
 import { tenantApi, apiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import useTitle from "@/lib/useTitle";
 
 export default function AdminSettings() {
   const { tenant, refresh } = useAuth();
+  useTitle("Settings");
   const [params, setParams] = useSearchParams();
   const [tab, setTab] = useState(params.get("tab") || "branding");
   const [brand, setBrand] = useState({ business_name: "", phone: "", website: "", logo_url: "", accent_color: "#D4AF37", secondary_color: "#0A0A0B" });

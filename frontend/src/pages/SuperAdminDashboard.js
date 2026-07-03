@@ -5,6 +5,7 @@ import { LogOut, Plus, Ban, Play, Trash2, UserCog, Users, DollarSign, HardDrive,
 import { superApi, SUPER_TOKEN_KEY, TENANT_TOKEN_KEY, formatBytes, apiError } from "@/lib/api";
 import Footer from "@/components/Footer";
 import ThemeToggle from "@/components/ThemeToggle";
+import useTitle from "@/lib/useTitle";
 
 function StatCard({ icon: Icon, label, value, tint }) {
   return (
@@ -19,6 +20,7 @@ function StatCard({ icon: Icon, label, value, tint }) {
 }
 
 export default function SuperAdminDashboard() {
+  useTitle("Super Admin Console");
   const nav = useNavigate();
   const [tenants, setTenants] = useState([]);
   const [overview, setOverview] = useState(null);

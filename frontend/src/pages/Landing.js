@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { Camera, ShieldCheck, HardDrive, Share2, Video, Sparkles, ArrowRight } from "lucide-react";
 import Footer from "@/components/Footer";
 import ThemeToggle from "@/components/ThemeToggle";
+import useTitle from "@/lib/useTitle";
 
 const HERO = "https://images.pexels.com/photos/11813966/pexels-photo-11813966.jpeg";
 
@@ -17,6 +18,7 @@ const features = [
 ];
 
 export default function Landing() {
+  useTitle("Wedding Photography Galleries");
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "var(--sa-bg)" }}>
       <header className="sticky top-0 z-40" style={{ background: "var(--sa-header-bg)", backdropFilter: "blur(18px)", borderBottom: "1px solid var(--sa-border)" }}>

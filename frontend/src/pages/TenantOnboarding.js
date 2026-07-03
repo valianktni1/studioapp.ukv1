@@ -5,11 +5,13 @@ import { ArrowRight, ArrowLeft, Check } from "lucide-react";
 import { tenantApi, apiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import Footer from "@/components/Footer";
+import useTitle from "@/lib/useTitle";
 
 export default function TenantOnboarding() {
   const nav = useNavigate();
   const { loading, admin, tenant, refresh } = useAuth();
   const [step, setStep] = useState(0);
+  useTitle("Studio Setup");
   const [form, setForm] = useState({
     business_name: "", contact_email: "", phone: "", website: "",
     logo_url: "", accent_color: "#D4AF37", secondary_color: "#0A0A0B",

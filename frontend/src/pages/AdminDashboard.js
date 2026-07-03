@@ -5,6 +5,7 @@ import { Plus, FolderOpen, Image as ImageIcon, Clock, Download, Album, HardDrive
 import AdminShell from "@/components/AdminShell";
 import { tenantApi, formatBytes, apiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import useTitle from "@/lib/useTitle";
 
 function Stat({ icon: Icon, label, value, tint }) {
   return (
@@ -20,6 +21,7 @@ function Stat({ icon: Icon, label, value, tint }) {
 
 export default function AdminDashboard() {
   const { tenant } = useAuth();
+  useTitle(tenant?.business_name || "Dashboard");
   const [stats, setStats] = useState(null);
   const [galleries, setGalleries] = useState([]);
   const [visitors, setVisitors] = useState([]);

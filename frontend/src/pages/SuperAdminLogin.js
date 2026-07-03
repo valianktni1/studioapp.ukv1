@@ -4,12 +4,14 @@ import { toast } from "sonner";
 import { ShieldCheck } from "lucide-react";
 import { pub, superApi, SUPER_TOKEN_KEY, apiError } from "@/lib/api";
 import Footer from "@/components/Footer";
+import useTitle from "@/lib/useTitle";
 
 export default function SuperAdminLogin() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const nav = useNavigate();
+  useTitle("Super Admin");
 
   const submit = async (e) => {
     e.preventDefault();

@@ -12,6 +12,7 @@ export default function AdminLogin() {
   const [busy, setBusy] = useState(false);
   const nav = useNavigate();
   const { loginWithToken } = useAuth();
+  useTitle("Photographer Login");
 
   const submit = async (e) => {
     e.preventDefault();
