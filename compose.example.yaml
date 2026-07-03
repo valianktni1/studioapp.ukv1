@@ -11,11 +11,10 @@ services:
     restart: unless-stopped
     depends_on:
       - mongodb
+    # GPU is OPTIONAL: ffmpeg auto-uses the AMD 780M via VAAPI when the driver
+    # supports it, and silently falls back to CPU otherwise. Nothing to configure.
     devices:
-      - /dev/dri/renderD128:/dev/dri/renderD128
-    group_add:
-      - "44"
-      - "993"
+      - /dev/dri:/dev/dri
     environment:
       - MONGO_URL=mongodb://mongodb:27017
       - DB_NAME=studioapp
