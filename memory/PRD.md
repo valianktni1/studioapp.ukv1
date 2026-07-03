@@ -54,6 +54,22 @@ Turn a single-tenant wedding photography gallery system into a **multi-tenant Sa
 - Verified iteration_4: Professional studio -> gallery_limit=30; 11th gallery on Starter -> 402; no GB copy remains in tenant UI.
 - NOTE: email suite + this fix are in preview/codebase; LIVE site shows old behaviour until Save to GitHub (studioapp.ukv1/main) + Dockge rebuild.
 
+## Phase 1 — Tenant Logo Upload (2026-07-03) — DONE
+- Tenants upload a logo IMAGE file (not just URL) at signup (optional), onboarding, and Settings > Branding.
+- Stored via Emergent object storage (storage_client.py, init at startup). routes/uploads.py: POST /api/admin/logo (auth, multipart, PIL-validated, 5MB, png/jpg/webp/gif/svg) -> db.assets + tenant.logo_url absolute via PUBLIC_BASE_URL. GET /api/public/asset/{id} serves bytes publicly (for emails/galleries).
+- Frontend: components/LogoUpload.js reused in AdminSettings (Branding), TenantOnboarding (step 1, prefilled), Signup (deferred upload after register).
+- Env added: EMERGENT_LLM_KEY, PUBLIC_BASE_URL (also added to compose.example.yaml — user MUST set these on TrueNAS).
+- Verified iteration_5: backend 4/4 + all UI flows pass; validation rejects non-images (400).
+
+## Client Gallery build — remaining phases (confirmed order)
+- Phase 2: Client Gallery Landing (cinematic hero, couple-name parse, gold separators, album instruction cards, album subfolder cards, dark/light persistence).
+- Phase 3: Browsing (masonry grid, CSS watermark, progressive lightbox + smart preload, single & ZIP download progress, sticky header).
+- Phase 4: Cinematic slideshow (Ken Burns, dual-layer crossfade, music picker — agent to source 3 royalty-free tracks, intro sequence, auto-hide controls).
+- Phase 5: Video pipeline (VAAPI/FFmpeg transcode + faststart, NGINX secure_link, video.js) — backend only, untestable in preview.
+- Phase 6: Print ordering + PayPal (user will add PayPal creds in super admin panel).
+- Phase 7: QR-code PDFs (Minimal/Classic/Botanical).
+- Phase 8: Email — expiry reminders (background job) + reusable templates with {couple_name}/{gallery_link} tokens.
+
 ## Next Tasks
 1. PayPal (awaiting credentials) — subscriptions + print orders.
 2. Video transcoding (VAAPI/FFmpeg) + NGINX secure_link (backend logic only; no ffmpeg/GPU in preview).

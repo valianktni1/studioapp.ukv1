@@ -28,6 +28,14 @@ async def upload_logo(file: UploadFile = File(...), ctx=Depends(get_current_tena
     data = await file.read()
     if len(data) > MAX_BYTES:
         raise HTTPException(status_code=400, detail="Logo must be under 5 MB")
+    if ext != "svg":
+        # verify it is a real, decodable raster image
+        try:
+            from io import BytesIO
+            from PIL import Image
+            Image.open(BytesIO(data)).verify()
+        except Exception:
+            raise HTTPException(status_code=400, detail="That file doesn't look like a valid image")
     content_type = ALLOWED[ext]
     path = f"{APP_NAME}/logos/{ctx['tenant_id']}/{uuid.uuid4()}.{ext}"
     try:

@@ -22,7 +22,7 @@ export default function TenantOnboarding() {
     if (loading) return;
     if (!admin) { nav("/login"); return; }
     if (tenant?.onboarding_complete) { nav("/admin"); return; }
-    if (tenant) setForm((f) => ({ ...f, business_name: tenant.business_name || "", contact_email: tenant.email || "" }));
+    if (tenant) setForm((f) => ({ ...f, business_name: tenant.business_name || "", contact_email: tenant.email || "", logo_url: tenant.logo_url || "" }));
   }, [loading, admin, tenant]);
 
   const finish = async () => {
