@@ -176,14 +176,16 @@ def ensure_video_faststart(src_path):
 
 
 def _transcode_cmd(src, dst, use_vaapi):
+    # Exact commands proven on the AMD 780M (from the user's working single-tenant app).
     if use_vaapi:
-        # Decode on CPU, upload frames to the AMD 780M, scale + H.264 encode on the GPU (VAAPI).
-        # The hwupload chain is robust across any source codec, unlike full -hwaccel decode.
-        return [FFMPEG, "-y", "-vaapi_device", VAAPI_DEVICE, "-i", str(src),
-                "-vf", "format=nv12,hwupload,scale_vaapi=w=-2:h=1080", "-c:v", "h264_vaapi", "-b:v", "5M",
-                "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(dst)]
-    return [FFMPEG, "-y", "-i", str(src), "-vf", "scale=-2:1080", "-c:v", "libx264", "-preset", "medium",
-            "-b:v", "5M", "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(dst)]
+        return [FFMPEG, "-y", "-hwaccel", "vaapi", "-hwaccel_device", VAAPI_DEVICE,
+                "-hwaccel_output_format", "vaapi", "-i", str(src),
+                "-vf", "format=nv12|vaapi,scale_vaapi=w=-2:h=1080", "-c:v", "h264_vaapi",
+                "-b:v", "5M", "-maxrate", "5M", "-bufsize", "10M",
+                "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", str(dst)]
+    return [FFMPEG, "-y", "-i", str(src), "-c:v", "libx264", "-preset", "medium",
+            "-b:v", "5M", "-maxrate", "5M", "-bufsize", "10M", "-vf", "scale=-2:1080",
+            "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", "-threads", "2", str(dst)]
 
 
 def transcode_web(gallery_id, tenant_id, subfolder_slug, filename, src_path):
