@@ -62,7 +62,7 @@ Turn a single-tenant wedding photography gallery system into a **multi-tenant Sa
 - Verified iteration_5: backend 4/4 + all UI flows pass; validation rejects non-images (400).
 
 ## Client Gallery build — remaining phases (confirmed order)
-- Phase 2: Client Gallery Landing (cinematic hero, couple-name parse, gold separators, album instruction cards, album subfolder cards, dark/light persistence).
+- Phase 2: Client Gallery Landing — DONE 2026-07-03 (iteration_6, frontend 100%). ShareView.js fully rewritten: cinematic hero (admin cover, NO auto-pick per user), auto-parsed couple name, gold diamonds, welcome tagline, floating header (inverted logo, Order Prints, theme toggle, fav counter), 3 instruction cards, album subfolder cards (cover+count+hover zoom), album view (sticky header, info banner, Download All, grid, CSS watermark, favourites view + Submit for Album, lightbox), dark/light persisted in localStorage 'gallery_dark_mode'. Order Prints/Slideshow show 'coming soon' toasts.
 - Phase 3: Browsing (masonry grid, CSS watermark, progressive lightbox + smart preload, single & ZIP download progress, sticky header).
 - Phase 4: Cinematic slideshow (Ken Burns, dual-layer crossfade, music picker — agent to source 3 royalty-free tracks, intro sequence, auto-hide controls).
 - Phase 5: Video pipeline (VAAPI/FFmpeg transcode + faststart, NGINX secure_link, video.js) — backend only, untestable in preview.
