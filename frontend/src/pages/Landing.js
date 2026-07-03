@@ -11,7 +11,7 @@ const HERO = "https://images.pexels.com/photos/11813966/pexels-photo-11813966.jp
 const features = [
   { icon: Share2, title: "Client Galleries", body: "Password-protected, branded galleries your couples will love. View, favourite, download." },
   { icon: Video, title: "Video Delivery", body: "Web-optimised streaming with GPU transcoding and direct high-speed downloads." },
-  { icon: HardDrive, title: "Generous Storage", body: "Plans from 250GB to 1TB. Track usage in real time, upgrade any time." },
+  { icon: HardDrive, title: "Gallery Plans", body: "Simple plans by gallery count — Starter 10, Professional 30, Studio 60. Upgrade any time." },
   { icon: ShieldCheck, title: "Secure & Isolated", body: "Every studio is fully isolated. 2FA, signed links, and expiring shares built in." },
   { icon: Sparkles, title: "Your Brand", body: "Your logo, colours and business name across every gallery and email. Zero StudioApp noise." },
   { icon: Camera, title: "Album Workflow", body: "Let couples heart favourites, choose covers and submit album selections in a few taps." },

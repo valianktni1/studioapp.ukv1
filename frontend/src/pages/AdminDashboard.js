@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { Plus, FolderOpen, Image as ImageIcon, Clock, Download, Album, HardDrive, Radio } from "lucide-react";
+import { Plus, FolderOpen, Image as ImageIcon, Clock, Download, Album, Radio } from "lucide-react";
 import AdminShell from "@/components/AdminShell";
-import { tenantApi, formatBytes, apiError } from "@/lib/api";
+import { tenantApi, apiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import useTitle from "@/lib/useTitle";
 
@@ -83,7 +83,7 @@ export default function AdminDashboard() {
           <Stat icon={Clock} label="Expiring Soon" value={stats.expiring_soon} tint="#f59e0b" />
           <Stat icon={Download} label="Downloads Wk" value={stats.downloads_this_week} tint="#4ade80" />
           <Stat icon={Album} label="Pending Albums" value={stats.pending_albums} tint="#f472b6" />
-          <Stat icon={HardDrive} label="Storage" value={formatBytes(stats.storage_used_bytes)} tint="#818cf8" />
+          <Stat icon={FolderOpen} label="Galleries Left" value={Math.max(0, (stats.gallery_limit || 0) - (stats.active_galleries || 0))} tint="#818cf8" />
         </div>
       )}
 

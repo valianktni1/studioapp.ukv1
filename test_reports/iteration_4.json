@@ -1,0 +1,29 @@
+{
+  "summary": "Iteration 4 — gallery-count plan bug fix verified end-to-end. Backend: 6/6 pytest tests pass (super_admin login, professional-tenant creation returns 200 with gallery_limit=30, 'pro' legacy plan value correctly returns 400, /overview reports plans by gallery_limit 10/30/60, demo tenant dashboard-stats returns gallery_limit=30 & plan_label=Professional, and 402 enforcement confirmed by creating a fresh Starter tenant with 10 galleries and observing the 11th create returning HTTP 402 'You've reached your plan limit of 10 galleries.'). Frontend: Landing page pricing cards show Starter 10 / Professional 30 / Studio 60 galleries with no 'GB/TB/250/500/1TB' storage copy anywhere. Super Admin create-tenant modal dropdown [data-testid=ct-plan] now offers 'Starter — 10 galleries', 'Professional — 30 galleries', 'Studio — 60 galleries'; submitting Professional creates a tenant that appears in the tenants table as 'Professional' with '0 / 30'. Tenant AdminDashboard shows 'GALLERIES LEFT' stat (no 'Storage' bytes card) and usage bar reads 'Professional plan · galleries used  4 / 30'.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_4.py",
+    "/app/test_reports/pytest/iteration_4.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/super_admin.py::update_plan lines 157-158: `if body.storage_limit_bytes is not None: updates['gallery_limit'] = body.storage_limit_bytes` — the Pydantic field name still says 'storage_limit_bytes' but is being written into the 'gallery_limit' column. Recommend renaming the model field to `gallery_limit` for clarity; current behaviour is functionally correct but semantically misleading and will confuse future readers.",
+    "routes/super_admin.py::overview still returns 'total_storage_used_bytes' — harmless but no longer surfaced in UI; can be removed or left as internal metric.",
+    "routes/galleries.py::dashboard_stats still returns 'storage_used_bytes' — unused by the redesigned tenant dashboard; consider dropping or repurposing."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_4.py (new)"
+  ],
+  "success_rate": { "backend": "100%", "frontend": "100%" },
+  "test_credentials": "super: superadmin / Stu!d10App_2026xQ ; tenant: demo@studio-app.uk / Demo!2026 (tenant login endpoint is POST /api/admin/login, not /api/auth/login)",
+  "seed_data_creation": "Test tenants and starter-plan galleries were created and deleted within the same test (auto-cleanup in try/finally). Left over TEST_ galleries + 'Over Limit' gallery from earlier iterations were cleaned from the demo tenant.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All plan-by-gallery-count refactor items pass. Note tenant login endpoint is /api/admin/login (not /api/auth/login). Sign in button on /login is not type=submit — click by text 'Sign in'. Notify Client UI flow not re-tested this iteration (iteration_3 already confirmed it and code untouched).",
+  "rca of the issue": "Original bug: Super Admin create-tenant dropdown posted plan='pro' but PLANS dict keys are starter/professional/studio, so backend returned 400 'Invalid plan'. Fix (already applied by main agent): dropdown option values changed to starter/professional/studio with gallery-count labels; PLANS updated to gallery_limit 10/30/60; frontend AdminDashboard and Landing updated to use gallery counts instead of bytes. Reproduction: POST /api/super-admin/tenants with plan='pro' still returns 400 (verified). POST with plan='professional' returns 200 with gallery_limit=30 (verified). Gallery limit enforcement path in routes/galleries.py:71-72 raises 402 when count>=limit (verified by creating 11th gallery on a starter tenant)."
+}

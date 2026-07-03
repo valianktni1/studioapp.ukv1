@@ -180,9 +180,9 @@ export default function SuperAdminDashboard() {
             <div><label className="sa-label block mb-2">Temp password</label><input className="sa-input" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required data-testid="ct-password" /></div>
             <div><label className="sa-label block mb-2">Plan</label>
               <select className="sa-input" value={form.plan} onChange={(e) => setForm({ ...form, plan: e.target.value })} data-testid="ct-plan">
-                <option value="starter">Starter — 250GB</option>
-                <option value="pro">Pro — 500GB</option>
-                <option value="studio">Studio — 1TB</option>
+                <option value="starter">Starter — 10 galleries</option>
+                <option value="professional">Professional — 30 galleries</option>
+                <option value="studio">Studio — 60 galleries</option>
               </select>
             </div>
             <div className="flex gap-3 pt-2">
