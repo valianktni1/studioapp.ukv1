@@ -53,6 +53,7 @@ export default function ShareView() {
   const [dl, setDl] = useState({});
   const [slideshow, setSlideshow] = useState(false);
   const [prints, setPrints] = useState(false);
+  const [thankYou, setThankYou] = useState(null); // null | submitted count
   const [light, setLight] = useState(() => localStorage.getItem("gallery_dark_mode") === "light");
   const guestInput = useRef();
 
@@ -119,7 +120,7 @@ export default function ShareView() {
   };
 
   const submitFavs = async () => {
-    try { const { data: r } = await pub.post(`/share/${token}/submit-favourites`, {}); toast.success(`Submitted ${r.count} favourites for your album`); }
+    try { const { data: r } = await pub.post(`/share/${token}/submit-favourites`, {}); setThankYou(r.count); }
     catch (err) { toast.error(apiError(err)); }
   };
 
@@ -413,6 +414,27 @@ export default function ShareView() {
       )}
 
       <footer className="studio-footer">Site Designed &amp; Hosted by <span style={{ color: accent, fontWeight: 700 }}>StudioApp</span></footer>
+      {thankYou !== null && <ThankYouModal count={thankYou} accent={accent} brand={brand} onClose={() => setThankYou(null)} />}
     </div>
+  );
+}
+
+function ThankYouModal({ count, accent, brand, onClose }) {
+  return (
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
+      onClick={onClose} data-testid="thank-you-modal">
+      <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ type: "spring", duration: 0.5 }}
+        className="sa-card p-8 max-w-md w-full text-center" onClick={(e) => e.stopPropagation()}>
+        <div className="w-16 h-16 mx-auto mb-6 rounded-full flex items-center justify-center" style={{ background: accent }}>
+          <Heart size={30} color="#fff" fill="#fff" />
+        </div>
+        <h2 className="font-display italic text-3xl mb-3">Thank You!</h2>
+        <p className="text-base mb-6" style={{ color: "var(--sa-muted)" }}>
+          Your {count} favourite {count === 1 ? "photo has" : "photos have"} been submitted for your album with {brand}.
+        </p>
+        <button onClick={onClose} className="sa-btn" style={{ background: accent }} data-testid="thank-you-close">Close</button>
+      </motion.div>
+    </motion.div>
   );
 }

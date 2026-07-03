@@ -137,15 +137,27 @@ def _set_video_status(file_id, status, web_ready=None):
 
 
 def video_poster(gallery_id, subfolder_slug, filename, src_path):
-    """Extract a frame ~1s in and build thumb + preview jpgs (so the grid shows a still)."""
+    """Extract a frame ~1s in and build thumb + preview jpgs (so the grid shows a still).
+
+    Uses OUTPUT seeking (`-i` then `-ss`) which is accurate on videos with sparse
+    keyframes, and falls back to frame 0 if the 1s seek yields nothing. This mirrors
+    the proven make_video_thumbnail logic from the user's reference repo.
+    """
     if not FFMPEG:
         return False
     src = Path(src_path)
     stem = Path(filename).stem
     frame = src.parent / f".{stem}.frame.jpg"
     try:
-        subprocess.run([FFMPEG, "-y", "-ss", "1", "-i", str(src), "-frames:v", "1", "-q:v", "3", str(frame)],
-                       capture_output=True, timeout=120, check=True)
+        cmd = [FFMPEG, "-y", "-i", str(src), "-ss", "00:00:01", "-vframes", "1", "-q:v", "2", str(frame)]
+        subprocess.run(cmd, capture_output=True, timeout=60)
+        if not frame.exists() or frame.stat().st_size == 0:
+            # Fallback: extract the very first frame
+            cmd[4] = "00:00:00"
+            subprocess.run(cmd, capture_output=True, timeout=60)
+        if not frame.exists() or frame.stat().st_size == 0:
+            logger.warning("video poster: no frame extracted for %s", filename)
+            return False
         thumb = cache_dir(gallery_id, "thumbs") / subfolder_slug / f"{stem}.jpg"
         preview = cache_dir(gallery_id, "previews") / subfolder_slug / f"{stem}.jpg"
         _resize_to(frame, thumb, THUMB_SIZE, 78)
@@ -189,15 +201,23 @@ def _transcode_cmd(src, dst, use_vaapi):
 
 
 def transcode_web(gallery_id, tenant_id, subfolder_slug, filename, src_path):
-    """Create {stem}.web.mp4 (1080p H.264) — GPU (VAAPI) first, CPU fallback."""
+    """Create {stem}.web.mp4 (1080p H.264) — GPU (VAAPI) first, CPU fallback.
+
+    Writes to a temp file first and only renames to the final .web.mp4 on success,
+    so partial/failed transcodes are never served (matches the reference repo).
+    """
     if not FFMPEG:
         return False
     src = Path(src_path)
     dst = src.parent / f"{src.stem}.web.mp4"
+    if dst.exists() and dst.stat().st_size > 0:
+        return True
+    tmp = src.parent / f"{src.stem}.web.tmp.mp4"
     for use_vaapi in (True, False):
         try:
-            subprocess.run(_transcode_cmd(src, dst, use_vaapi), capture_output=True, timeout=7200, check=True)
-            if dst.exists() and dst.stat().st_size > 0:
+            subprocess.run(_transcode_cmd(src, tmp, use_vaapi), capture_output=True, timeout=7200, check=True)
+            if tmp.exists() and tmp.stat().st_size > 0:
+                tmp.rename(dst)
                 logger.info("transcoded %s via %s", filename, "GPU (VAAPI/780M)" if use_vaapi else "CPU (libx264)")
                 return True
         except subprocess.CalledProcessError as e:
@@ -205,6 +225,10 @@ def transcode_web(gallery_id, tenant_id, subfolder_slug, filename, src_path):
             logger.warning("transcode (%s) failed for %s: %s", "vaapi" if use_vaapi else "cpu", filename, err)
         except Exception as e:
             logger.warning("transcode (%s) failed for %s: %s", "vaapi" if use_vaapi else "cpu", filename, e)
+        finally:
+            if tmp.exists():
+                try: tmp.unlink()
+                except OSError: pass
     return False
 
 
