@@ -1,10 +1,12 @@
 import smtplib
 import uuid
+import html as html_lib
 from datetime import datetime, timezone
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.utils import formataddr
 from fastapi import APIRouter, Depends, HTTPException
+from starlette.concurrency import run_in_threadpool
 
 from db import db
 from auth_utils import get_current_tenant
@@ -32,9 +34,9 @@ def _send(cfg, to, subject, html):
     port = int(cfg.get("smtp_port", 587))
     try:
         if port == 465:
-            server = smtplib.SMTP_SSL(cfg["smtp_host"], port, timeout=20)
+            server = smtplib.SMTP_SSL(cfg["smtp_host"], port, timeout=8)
         else:
-            server = smtplib.SMTP(cfg["smtp_host"], port, timeout=20)
+            server = smtplib.SMTP(cfg["smtp_host"], port, timeout=8)
             server.starttls()
         server.login(cfg["smtp_email"], cfg["smtp_password"])
         server.sendmail(cfg["smtp_email"], [to], msg.as_string())
@@ -78,7 +80,7 @@ async def test_smtp(body: dict, ctx=Depends(get_current_tenant)):
         raise HTTPException(status_code=400, detail="No recipient")
     tenant = await db.tenants.find_one({"id": ctx["tenant_id"]})
     html = f"<h2 style='font-family:Georgia,serif'>Test email from {tenant.get('business_name')}</h2><p>Your StudioApp email settings are working. 🎉</p><p style='color:#888;font-size:12px'>Powered by StudioApp</p>"
-    _send(cfg, to, f"Test email from {tenant.get('business_name')}", html)
+    await run_in_threadpool(_send, cfg, to, f"Test email from {tenant.get('business_name')}", html)
     await db.email_log.insert_one({"id": str(uuid.uuid4()), "tenant_id": ctx["tenant_id"], "type": "test",
                                    "subject": "Test email", "recipient": to, "created_at": now_iso()})
     return {"sent": True}
@@ -97,8 +99,8 @@ async def notify_couple(gid: str, body: dict, ctx=Depends(get_current_tenant)):
     biz = tenant.get("business_name")
     accent = tenant.get("accent_color", "#D4AF37")
     link = body.get("share_url", "")
-    pwd = body.get("password", "")
-    message = body.get("message", "")
+    pwd = html_lib.escape(body.get("password", "") or "")
+    message = html_lib.escape(body.get("message", "") or "")
     logo = f"<img src='{tenant.get('logo_url')}' alt='{biz}' style='max-height:60px;margin-bottom:16px'/>" if tenant.get("logo_url") else ""
     html = f"""
     <div style='font-family:Georgia,serif;max-width:560px;margin:auto;padding:24px;color:#1a1a1a'>
@@ -111,7 +113,7 @@ async def notify_couple(gid: str, body: dict, ctx=Depends(get_current_tenant)):
       {f"<p style='font-family:Arial,sans-serif'>Password: <b>{pwd}</b></p>" if pwd else ''}
       <p style='color:#888;font-size:12px;margin-top:32px'>Powered by StudioApp</p>
     </div>"""
-    _send(cfg, to, f"Your gallery is ready — {biz}", html)
+    await run_in_threadpool(_send, cfg, to, f"Your gallery is ready — {biz}", html)
     await db.email_log.insert_one({"id": str(uuid.uuid4()), "tenant_id": ctx["tenant_id"], "type": "gallery_ready",
                                    "subject": f"Your gallery is ready — {biz}", "gallery_name": g.get("folder_name"),
                                    "recipient": to, "created_at": now_iso()})

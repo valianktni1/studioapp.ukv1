@@ -31,8 +31,13 @@ export function formatBytes(bytes = 0) {
 }
 
 export function apiError(e) {
+  const status = e?.response?.status;
+  if (status === 502 || status === 503 || status === 504) return "The server took too long to respond. If sending email, check your SMTP settings and try again.";
   const d = e?.response?.data?.detail;
-  if (typeof d === "string") return d;
+  if (typeof d === "string") {
+    if (d.trim().startsWith("<")) return "Something went wrong on the server. Please try again.";
+    return d;
+  }
   if (Array.isArray(d)) return d.map((x) => x.msg || JSON.stringify(x)).join(" ");
   return e?.message || "Something went wrong";
 }

@@ -39,9 +39,19 @@ Turn a single-tenant wedding photography gallery system into a **multi-tenant Sa
 - P2: Docker Compose + TrueNAS mounts, logo file upload to object storage.
 - Security notes: gate /api/media/* before prod; set PUBLIC_BASE_URL for Stripe webhook; consider per-tenant share slug once subdomain routing is live.
 
+## Email/SMTP Suite (2026-07-03) — DONE
+- Per-tenant SMTP config: Settings > Email (SMTP) tab (host/port/from/sender/password), password never returned in plaintext (masked, has_password flag). Save via POST /api/admin/settings/smtp, load via GET.
+- Test send: POST /api/admin/settings/smtp/test. Branded "Gallery Ready" client email: POST /api/admin/galleries/{gid}/notify (Notify Client button + modal in gallery detail, picks a share link, optional password/message). Email log: GET /api/admin/email-log.
+- From header uses formataddr((sender_name, smtp_email)) to avoid Hostinger 553. _send runs via run_in_threadpool (non-blocking), smtplib timeout=8s, message/password html-escaped.
+- Fixed pre-existing crash: AdminLogin.js was missing `useTitle` import (login page ReferenceError). 
+- Verified: iteration_3 backend 9/9 + all 4 frontend flows pass. NOTE: actual email delivery cannot be tested in preview (unreachable SMTP); friendly toast on 502/504.
+
 ## Next Tasks
-1. PayPal (awaiting credentials).
-2. Redeploy after each change (Save to Github -> Dockge rebuild).
+1. PayPal (awaiting credentials) — subscriptions + print orders.
+2. Video transcoding (VAAPI/FFmpeg) + NGINX secure_link (backend logic only; no ffmpeg/GPU in preview).
+3. Broadcast email to multiple gallery clients + editable templates; background job for share-link expiry reminders.
+4. Redeploy after each change (Save to Github -> Dockge rebuild).
+- Backlog security: Fernet-encrypt stored smtp_password at rest.
 
 ## Trials & Self-Signup (2026-07-02)
 - Public signup POST /api/admin/register -> creates tenant+admin, auto subdomain, starts **7-day free trial** (subscription_status="trialing", trial_ends_at=now+7d), auto-login -> onboarding. Landing/login CTAs wired to /signup.
