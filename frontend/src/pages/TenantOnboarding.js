@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowRight, ArrowLeft, Check } from "lucide-react";
 import { tenantApi, apiError } from "@/lib/api";
+import LogoUpload from "@/components/LogoUpload";
 import { useAuth } from "@/context/AuthContext";
 import Footer from "@/components/Footer";
 import useTitle from "@/lib/useTitle";
@@ -62,12 +63,11 @@ export default function TenantOnboarding() {
             )}
             {step === 1 && (
               <>
-                <div><label className="sa-label block mb-2">Logo URL (used on galleries &amp; emails)</label><input className="sa-input" placeholder="https://…" value={form.logo_url} onChange={(e) => setForm({ ...form, logo_url: e.target.value })} data-testid="ob-logo" /></div>
+                <div><label className="sa-label block mb-2">Logo (used on galleries &amp; emails)</label><LogoUpload value={form.logo_url} onUploaded={(url) => setForm({ ...form, logo_url: url })} /></div>
                 <div className="grid grid-cols-2 gap-4">
                   <div><label className="sa-label block mb-2">Accent colour</label><input type="color" className="sa-input h-12 p-1" value={form.accent_color} onChange={(e) => setForm({ ...form, accent_color: e.target.value })} data-testid="ob-accent" /></div>
                   <div><label className="sa-label block mb-2">Background</label><input type="color" className="sa-input h-12 p-1" value={form.secondary_color} onChange={(e) => setForm({ ...form, secondary_color: e.target.value })} data-testid="ob-secondary" /></div>
                 </div>
-                {form.logo_url && <img src={form.logo_url} alt="logo preview" className="h-16 object-contain" />}
               </>
             )}
             {step === 2 && (

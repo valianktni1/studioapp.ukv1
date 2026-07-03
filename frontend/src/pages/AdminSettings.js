@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Check } from "lucide-react";
 import AdminShell from "@/components/AdminShell";
+import LogoUpload from "@/components/LogoUpload";
 import { tenantApi, apiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import useTitle from "@/lib/useTitle";
@@ -105,7 +106,7 @@ export default function AdminSettings() {
       {tab === "branding" && (
         <form onSubmit={saveBrand} className="sa-card p-8 max-w-xl space-y-5" data-testid="branding-form">
           <div><label className="sa-label block mb-2">Business name</label><input className="sa-input" value={brand.business_name} onChange={(e) => setBrand({ ...brand, business_name: e.target.value })} data-testid="br-name" /></div>
-          <div><label className="sa-label block mb-2">Logo URL</label><input className="sa-input" value={brand.logo_url} onChange={(e) => setBrand({ ...brand, logo_url: e.target.value })} data-testid="br-logo" /></div>
+          <div><label className="sa-label block mb-2">Logo</label><LogoUpload value={brand.logo_url} onUploaded={(url) => { setBrand({ ...brand, logo_url: url }); refresh(); }} /></div>
           <div className="grid grid-cols-2 gap-4">
             <div><label className="sa-label block mb-2">Phone</label><input className="sa-input" value={brand.phone} onChange={(e) => setBrand({ ...brand, phone: e.target.value })} /></div>
             <div><label className="sa-label block mb-2">Website</label><input className="sa-input" value={brand.website} onChange={(e) => setBrand({ ...brand, website: e.target.value })} /></div>

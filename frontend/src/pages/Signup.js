@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowRight } from "lucide-react";
-import { pub, TENANT_TOKEN_KEY, apiError } from "@/lib/api";
+import { ArrowRight, Upload } from "lucide-react";
+import { pub, tenantApi, TENANT_TOKEN_KEY, apiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import Footer from "@/components/Footer";
 import useTitle from "@/lib/useTitle";
@@ -17,6 +17,8 @@ export default function Signup() {
     business_name: "", email: "", password: "",
     plan: ["starter", "professional", "studio"].includes(params.get("plan")) ? params.get("plan") : "starter",
   });
+  const [logoFile, setLogoFile] = useState(null);
+  const logoRef = useRef();
   const [busy, setBusy] = useState(false);
   useTitle("Create Account");
 
@@ -27,6 +29,13 @@ export default function Signup() {
       const { data } = await pub.post("/admin/register", form);
       localStorage.setItem(TENANT_TOKEN_KEY, data.token);
       await loginWithToken(data.token);
+      if (logoFile) {
+        try {
+          const fd = new FormData();
+          fd.append("file", logoFile);
+          await tenantApi.post("/admin/logo", fd, { headers: { "Content-Type": "multipart/form-data" } });
+        } catch { toast.message("Account created — you can add your logo in Settings"); }
+      }
       toast.success("Your studio account is ready");
       nav("/onboarding");
     } catch (err) {
@@ -61,6 +70,17 @@ export default function Signup() {
                 {Object.entries(PLAN_LABELS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
               </select>
               <p className="text-xs mt-2" style={{ color: "var(--sa-muted)" }}>You can add payment later in Settings → Billing.</p>
+            </div>
+            <div>
+              <label className="sa-label block mb-2">Logo (optional)</label>
+              <div className="flex items-center gap-4">
+                <div className="h-14 w-14 rounded flex items-center justify-center overflow-hidden shrink-0" style={{ border: "1px solid var(--sa-border)", background: "var(--sa-surface)" }}>
+                  {logoFile ? <img src={URL.createObjectURL(logoFile)} alt="logo" className="h-full w-full object-contain" data-testid="signup-logo-preview" /> : <span className="text-[10px]" style={{ color: "var(--sa-muted)" }}>None</span>}
+                </div>
+                <input ref={logoRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml" className="hidden" onChange={(e) => setLogoFile(e.target.files?.[0] || null)} data-testid="signup-logo-input" />
+                <button type="button" className="sa-btn-ghost" onClick={() => logoRef.current?.click()} data-testid="signup-logo-btn"><Upload size={16} /> {logoFile ? "Change logo" : "Upload logo"}</button>
+              </div>
+              <p className="text-xs mt-2" style={{ color: "var(--sa-muted)" }}>Or add it later in Settings → Branding.</p>
             </div>
             <button className="sa-btn w-full" disabled={busy} data-testid="signup-submit">{busy ? "Creating…" : "Create my business account"} <ArrowRight size={16} /></button>
           </form>

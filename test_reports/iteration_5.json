@@ -1,0 +1,28 @@
+{
+  "summary": "Phase 1 logo upload feature verified end-to-end. Backend endpoints (POST /api/admin/logo, GET /api/public/asset/{id}) work correctly with auth enforcement, non-image rejection (400), 5MB limit, DB persistence and absolute PUBLIC_BASE_URL. Frontend flows verified: Settings > Branding uploader shows preview, persists across reload and updates admin-header logo; Signup optional logo uploader present and account creation works both WITH and WITHOUT a chosen logo; Onboarding Branding step uploader works and shows preview. 4/4 pytest backend tests pass; all UI assertions pass.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Signup-with-logo -> Onboarding", "issue": "When user picks a logo on /signup, it is uploaded to backend and tenant.logo_url is set, but on redirect to /onboarding the Branding step (step 1) shows the LogoUpload with 'No logo' placeholder because TenantOnboarding.js only syncs business_name/contact_email from tenant (line 25), not logo_url. The logo IS saved server-side and appears in admin header after finish, but the onboarding preview does not reflect it, which is confusing UX. Fix: include logo_url in the useEffect sync in TenantOnboarding.js.", "affected_selectors": ["logo-preview", "logo-upload"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_logo_upload.py", "/app/test_reports/pytest/logo_results.xml"],
+  "action_items": [
+    "Minor UX: sync logo_url from tenant into onboarding form so users who uploaded a logo at signup see it prefilled in the Branding step (TenantOnboarding.js line ~25)."
+  ],
+  "critical_code_review_comments": [
+    "storage_client.py uses a module-global _storage_key without a lock — safe with FastAPI's single-process reload, but note if switched to multi-worker.",
+    "uploads.py accepts SVG (image/svg+xml) — SVG can carry embedded scripts; consider sanitising or disallowing SVG for user-uploaded content in Phase 2.",
+    "Content-type check is by file extension only (not by sniffing bytes) — user can rename foo.exe to foo.png and pass validation. Consider using python-magic or PIL to verify actual image."
+  ],
+  "updated_files": ["/app/backend/tests/test_logo_upload.py"],
+  "success_rate": {"backend": "100%", "frontend": "100% (with 1 minor UX gap)"},
+  "test_credentials": "demo@studio-app.uk / Demo!2026 (worked). Signup created ephemeral qa+*@example.com accounts (left behind).",
+  "seed_data_creation": "Created 2 test tenants during signup smoke test (qa+<rand>@example.com and qa+nl<rand>@example.com). Not cleaned up.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Phase 1 logo upload complete and working. Backend test file at /app/backend/tests/test_logo_upload.py can be reused for regression. Only outstanding item is a small UX polish in TenantOnboarding.js to prefill logo_url from tenant on mount.",
+  "rca of the issue": "N/A — no bug, minor UX gap only."
+}

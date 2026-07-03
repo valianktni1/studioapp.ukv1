@@ -7,7 +7,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from db import db, PLANS
 from auth_utils import hash_password, verify_password
-from routes import super_admin, tenant_auth, galleries, shares, public_share, billing, email
+from routes import super_admin, tenant_auth, galleries, shares, public_share, billing, email, uploads
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("studioapp")
@@ -32,6 +32,7 @@ app.include_router(shares.router)
 app.include_router(public_share.router)
 app.include_router(billing.router)
 app.include_router(email.router)
+app.include_router(uploads.router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -113,6 +114,12 @@ async def startup():
     await seed_super_admin()
     await seed_demo_tenant()
     await migrate_tenants()
+    try:
+        from storage_client import init_storage
+        init_storage()
+        logger.info("Object storage initialized")
+    except Exception as e:
+        logger.error("Object storage init failed: %s", e)
 
 
 @app.on_event("shutdown")
