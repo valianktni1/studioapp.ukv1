@@ -3,7 +3,7 @@ import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { Heart, Download, Sun, Moon, Upload, Lock, ArrowLeft, ShoppingBag, Play, FolderOpen, Check, Image as ImageIcon } from "lucide-react";
-import { pub, mediaUrl, apiError } from "@/lib/api";
+import { pub, API, mediaUrl, apiError } from "@/lib/api";
 import useTitle from "@/lib/useTitle";
 import ShareLightbox from "@/components/ShareLightbox";
 import Slideshow from "@/components/Slideshow";
@@ -135,13 +135,12 @@ export default function ShareView() {
     } catch (err) { toast.error(apiError(err)); }
     finally { setDl((p) => { const n = { ...p }; delete n[f.id]; return n; }); }
   };
-  const downloadAll = async () => {
-    toast.info("Preparing your ZIP…");
-    try {
-      const res = await pub.post(`/share/${token}/download-zip`, { grant }, { responseType: "blob" });
-      const url = URL.createObjectURL(res.data);
-      const a = document.createElement("a"); a.href = url; a.download = `${brand}.zip`; a.click(); URL.revokeObjectURL(url);
-    } catch (err) { toast.error(apiError(err)); }
+  const downloadAll = () => {
+    toast.success("Your download is starting…");
+    const url = `${API}/share/${token}/download-zip?grant=${encodeURIComponent(grant)}`;
+    const a = document.createElement("a");
+    a.href = url; a.rel = "noopener";
+    document.body.appendChild(a); a.click(); a.remove();
   };
 
   const guestUpload = async (e) => {

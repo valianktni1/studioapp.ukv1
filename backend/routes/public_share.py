@@ -224,26 +224,41 @@ async def share_download(token: str, file_id: str, grant: str = None):
     return FileResponse(str(path), filename=f["filename"])
 
 
-@router.post("/share/{token}/download-zip")
-async def share_download_zip(token: str, payload: dict = None):
+async def _build_zip_response(token: str, grant):
+    from zipstream import ZipStream
     s = await _resolve_share(token)
-    grant = (payload or {}).get("grant")
     await _require_download_access(s, grant)
     g = await db.galleries.find_one({"id": s["gallery_id"]})
     subfolders = [s["subfolder"]] if s.get("subfolder") else g.get("subfolders", [])
     files = await db.files.find(
         {"tenant_id": s["tenant_id"], "gallery_id": s["gallery_id"], "subfolder": {"$in": subfolders}}).to_list(10000)
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, "w", zipfile.ZIP_STORED) as zf:
-        for f in files:
-            p = gallery_dir(s["tenant_id"], s["gallery_id"], f["subfolder_slug"]) / f["filename"]
-            if p.exists():
-                zf.write(str(p), arcname=f"{f['subfolder']}/{f['filename']}")
-    buf.seek(0)
+
+    # Stream the ZIP on the fly (STORED = no re-compression of JPEGs) so the download
+    # starts instantly instead of assembling the whole archive in memory first.
+    zs = ZipStream(compress_type=zipfile.ZIP_STORED)
+    for f in files:
+        p = gallery_dir(s["tenant_id"], s["gallery_id"], f["subfolder_slug"]) / f["filename"]
+        if p.exists():
+            zs.add_path(str(p), arcname=f"{f['subfolder']}/{f['filename']}")
+
     await _log_download(s, g.get("folder_name") if g else "", "Download All (ZIP)")
     fname = (g.get("folder_name") if g else "gallery").replace(" ", "_") + ".zip"
-    return StreamingResponse(buf, media_type="application/zip",
-                             headers={"Content-Disposition": f"attachment; filename={fname}"})
+    headers = {"Content-Disposition": f'attachment; filename="{fname}"'}
+    try:
+        headers["Content-Length"] = str(len(zs))  # exact for STORED -> real browser progress bar
+    except Exception:
+        pass
+    return StreamingResponse(zs, media_type="application/zip", headers=headers)
+
+
+@router.post("/share/{token}/download-zip")
+async def share_download_zip(token: str, payload: dict = None):
+    return await _build_zip_response(token, (payload or {}).get("grant"))
+
+
+@router.get("/share/{token}/download-zip")
+async def share_download_zip_get(token: str, grant: str = ""):
+    return await _build_zip_response(token, grant)
 
 
 # ---------------- Guest uploads ----------------

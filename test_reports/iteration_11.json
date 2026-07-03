@@ -1,0 +1,22 @@
+{
+  "summary": "Verified streaming Download-All bug fix. Backend: GET & POST /api/share/{token}/download-zip return 200 application/zip in ~0.2s with valid streamed archives (arcnames 'Wedding Images/*.jpg', all files valid, no corrupt entries). Frontend: clicking Download All (data-testid=download-all) fires a native anchor navigation to GET /api/share/{token}/download-zip?grant=<jwt>, browser initiates download (Eva_&_Ella_27.06.26.zip), 'Your download is starting...' toast shown, NO 'Preparing…' spinner. Grid single-file dl-<id> buttons present (regression OK). download-favs button not visible on this share because Favourites album has 0 items — expected behaviour; will render when a favourite is heart-ed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_11_download_zip.py",
+    "/app/test_reports/pytest/iter11.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "public_share.py _require_download_access() only enforces JWT grant when share.has_password=true. For public download-enabled shares (no password), any grant value (including empty) is accepted — this appears intentional (the link IS the auth), but worth confirming with product; if 'download' access_level should require an issued grant even without a password, the check needs tightening.",
+    "_build_zip_response computes len(zs) to set Content-Length; if any file was added but path missing on disk, the length may be off. Currently gated by p.exists() check so OK.",
+    "Consider adding a rate limit on /download-zip to prevent abuse via the public link."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration_11_download_zip.py"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Public share, no auth needed. Token: eva-ella-27-06-26. Grant obtained via POST /api/share/{token}/access with body {\"password\":\"\"}",
+  "seed_data_creation": "None. Used existing Eva & Ella demo gallery (6 files, Wedding Images album, access_level=download).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 11 verified download-zip streaming fix end-to-end. Backend tests in /app/backend/tests/test_iteration_11_download_zip.py — 3/3 pass. UI test observed a native browser download event fire from download-all click. download-favs was not exercised because Favourites album currently has 0 items on the demo share; to test it, first heart a photo (fav-<id>) then navigate to Album Favourites."
+}
