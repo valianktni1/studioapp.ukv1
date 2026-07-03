@@ -46,6 +46,14 @@ Turn a single-tenant wedding photography gallery system into a **multi-tenant Sa
 - Fixed pre-existing crash: AdminLogin.js was missing `useTitle` import (login page ReferenceError). 
 - Verified: iteration_3 backend 9/9 + all 4 frontend flows pass. NOTE: actual email delivery cannot be tested in preview (unreachable SMTP); friendly toast on 502/504.
 
+## Gallery-count Plans Fix (2026-07-03) — DONE
+- Backend PLANS already gallery-count based (Starter 10/£15, Professional 30/£35, Studio 60/£65) with 402 enforcement in routes/galleries.py. Bug was stale FRONTEND leftovers:
+  - Super Admin "New Studio" dropdown showed 250GB/500GB/1TB AND sent plan="pro" (invalid key) -> creation failed 400 "Invalid plan". Fixed to starter/professional/studio + gallery-count labels.
+  - Landing feature copy "Generous Storage / 250GB-1TB" -> gallery-count messaging.
+  - Tenant AdminDashboard "Storage" (bytes) stat -> "Galleries Left"; usage bar shows active/limit.
+- Verified iteration_4: Professional studio -> gallery_limit=30; 11th gallery on Starter -> 402; no GB copy remains in tenant UI.
+- NOTE: email suite + this fix are in preview/codebase; LIVE site shows old behaviour until Save to GitHub (studioapp.ukv1/main) + Dockge rebuild.
+
 ## Next Tasks
 1. PayPal (awaiting credentials) — subscriptions + print orders.
 2. Video transcoding (VAAPI/FFmpeg) + NGINX secure_link (backend logic only; no ffmpeg/GPU in preview).
