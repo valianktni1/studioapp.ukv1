@@ -22,7 +22,7 @@ services:
       - SUPER_ADMIN_PASSWORD=Stu!d10App_2026xQ
       - UPLOAD_DIR=/data/userfiles
       - BACKUP_DIR=/backup
-      - ROOT_DOMAIN=studio-app.uk
+      - ROOT_DOMAIN=studioappgallery.uk
       - NGINX_VIDEO_SECRET=dc662f6eee919f8f9a6a1cf12c3a56986b8d26c7bf72a051
       - STRIPE_API_KEY=REPLACE_WITH_YOUR_STRIPE_SECRET_KEY
       - EMERGENT_LLM_KEY=REPLACE_WITH_YOUR_EMERGENT_LLM_KEY

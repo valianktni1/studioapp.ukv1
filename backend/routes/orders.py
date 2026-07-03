@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from starlette.concurrency import run_in_threadpool
 
-from db import db
+from db import db, resolve_public_base
 from auth_utils import get_current_tenant, get_current_super_admin
 
 router = APIRouter(prefix="/api", tags=["orders"])
@@ -155,7 +155,7 @@ async def create_print_order(token: str, body: dict):
              "status": "pending", "paypal_order_id": None, "created_at": now_iso()}
 
     if cfg.get("client_id") and cfg.get("secret"):
-        origin = (body.get("origin_url") or os.environ.get("PUBLIC_BASE_URL", "")).rstrip("/")
+        origin = (body.get("origin_url") or resolve_public_base()).rstrip("/")
         return_url = f"{origin}/s/{token}?print_paid={oid}"
         cancel_url = f"{origin}/s/{token}?print_cancel={oid}"
         try:

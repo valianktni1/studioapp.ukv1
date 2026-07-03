@@ -21,3 +21,17 @@ PLANS = {
     "professional": {"label": "Professional", "gallery_limit": 30, "price": 35},
     "studio": {"label": "Studio", "gallery_limit": 60, "price": 65},
 }
+
+
+def resolve_public_base() -> str:
+    """The app's public origin, used to build absolute links in emails/logos.
+    Prefers PUBLIC_BASE_URL; falls back to https://ROOT_DOMAIN. Returns '' if neither is set
+    so callers can refuse to emit a broken (host-less) URL."""
+    b = (os.environ.get("PUBLIC_BASE_URL") or "").strip().rstrip("/")
+    if b:
+        return b
+    rd = (os.environ.get("ROOT_DOMAIN") or "").strip().strip("/")
+    if rd and "." in rd:
+        return f"https://{rd}"
+    return ""
+

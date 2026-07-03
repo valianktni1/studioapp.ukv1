@@ -8,10 +8,10 @@ from starlette.concurrency import run_in_threadpool
 from db import db
 from auth_utils import get_current_tenant
 from storage_client import put_object, get_object, APP_NAME
+from db import resolve_public_base
 
 router = APIRouter(tags=["uploads"])
 
-PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
 ALLOWED = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp", "gif": "image/gif", "svg": "image/svg+xml"}
 MAX_BYTES = 5 * 1024 * 1024
 
@@ -47,7 +47,7 @@ async def upload_logo(file: UploadFile = File(...), ctx=Depends(get_current_tena
         "id": asset_id, "tenant_id": ctx["tenant_id"], "kind": "logo",
         "storage_path": result["path"], "content_type": content_type, "created_at": now_iso(),
     })
-    logo_url = f"{PUBLIC_BASE_URL}/api/public/asset/{asset_id}"
+    logo_url = f"{resolve_public_base()}/api/public/asset/{asset_id}"
     await db.tenants.update_one({"id": ctx["tenant_id"]}, {"$set": {"logo_url": logo_url, "logo_asset_id": asset_id}})
     return {"logo_url": logo_url, "asset_id": asset_id}
 

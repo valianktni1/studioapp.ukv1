@@ -1,0 +1,25 @@
+{
+  "summary": "Verified bug fix for host-less gallery link in expiry reminder email. resolve_public_base() precedence, expiry reminder link building, host-less skip path, logo upload absolute URL, and QR PDF regression all pass (9/9).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_10_public_base.py",
+    "/app/test_reports/pytest/iteration_10.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "run_expiry_reminders() is wired only if a scheduler triggers it; verify a scheduled task actually invokes it in production (not tested here).",
+    "resolve_public_base() rejects ROOT_DOMAIN without a '.' (returns ''); good safety but silently returns empty — consider a logged warning at startup if neither var is set.",
+    "_send raises HTTPException even from a background job path — the calling loop in run_expiry_reminders swallows it via generic try/except, so the retry policy is 'never'. Consider logging failed reminders."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_10_public_base.py"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "n/a"},
+  "test_credentials": "demo@studio-app.uk / Demo!2026 (used for logo + QR PDF endpoints). Note: local Mongo has no tenant with admin_email=demo@studio-app.uk; SMTP config exists under tenant 8e4d4846-... (smtp.example.com). Expiry test targets whichever tenant has SMTP configured.",
+  "seed_data_creation": "Per-test: TEST_ gallery + TEST_ share expiring tomorrow, cleaned up after each test in TestExpiryReminders. TestQrPdfRegression may create+delete a TEST_qr share if none exists.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Test file uses a module-scoped asyncio loop and monkeypatches routes.email._send (no real SMTP). PUBLIC_BASE_URL in /app/backend/.env is untouched (still https://handoff-app-5.preview.emergentagent.com). Run with: pytest tests/test_iteration_10_public_base.py -o addopts=''.",
+  "rca of the issue": "Original prod bug: PUBLIC_BASE_URL was empty on the live server, so f'{PUBLIC_BASE_URL}/s/{slug}' produced 'http:///s/...'. Fix (db.resolve_public_base) prefers PUBLIC_BASE_URL, falls back to https://ROOT_DOMAIN, else ''. run_expiry_reminders() now aborts (returns 0, sends nothing) if resolve_public_base() is empty. Verified via monkeypatched _send capturing exact HTML — no 'http:///' present; absolute link 'https://handoff-app-5.preview.emergentagent.com/s/testtoken123' confirmed; expiry_reminder_sent flag set to True. Empty-base case: _send never called, sent==0."
+}

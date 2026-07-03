@@ -9,8 +9,11 @@ from email.utils import formataddr
 from fastapi import APIRouter, Depends, HTTPException
 from starlette.concurrency import run_in_threadpool
 
-from db import db
+from db import db, resolve_public_base
 from auth_utils import get_current_tenant
+
+import logging
+logger = logging.getLogger("studioapp")
 
 router = APIRouter(prefix="/api/admin", tags=["email"])
 
@@ -191,7 +194,10 @@ async def send_template(gid: str, body: dict, ctx=Depends(get_current_tenant)):
 # ---------------- Expiry reminder background job ----------------
 async def run_expiry_reminders():
     from media import parse_couple_name
-    base = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+    base = resolve_public_base()
+    if not base:
+        logger.warning("Skipping expiry reminders: neither PUBLIC_BASE_URL nor ROOT_DOMAIN is set (would produce broken links).")
+        return 0
     now = datetime.now(timezone.utc)
     soon = now + timedelta(days=7)
     sent = 0

@@ -8,7 +8,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import FileResponse, StreamingResponse
 
-from db import db
+from db import db, resolve_public_base
 from auth_utils import verify_password, get_jwt_secret
 from media import (
     slugify, file_type_for, gallery_dir, cache_dir,
@@ -325,7 +325,7 @@ async def share_video_url(token: str, file_id: str):
         uri = f"/video/{s['tenant_id']}/{s['gallery_id']}/{f['subfolder_slug']}/{stem}.web.mp4"
         md5, expires = sign_video_uri(uri)
         return {"url": f"{base}{uri}?md5={md5}&expires={expires}", "type": "web"}
-    public = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+    public = resolve_public_base()
     return {"url": f"{public}/api/media/original/{s['gallery_id']}/{f['subfolder_slug']}/{f['filename']}", "type": "original"}
 
 

@@ -99,12 +99,13 @@ async def share_qr_pdf(sid: str, design: str = "minimal", ctx=Depends(get_curren
     from fastapi.responses import StreamingResponse
     from qr_pdf import build_qr_pdf
     from media import parse_couple_name
+    from db import resolve_public_base
     s = await db.shares.find_one({"id": sid, "tenant_id": ctx["tenant_id"]})
     if not s:
         raise HTTPException(status_code=404, detail="Share not found")
     g = await db.galleries.find_one({"id": s["gallery_id"]})
     t = await db.tenants.find_one({"id": ctx["tenant_id"]})
-    base = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+    base = resolve_public_base()
     url = f"{base}/s/{s.get('custom_slug') or s['token']}"
     couple = parse_couple_name(g["folder_name"]) if g else "Your Gallery"
     brand = (t or {}).get("business_name", "Gallery")
