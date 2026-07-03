@@ -58,8 +58,8 @@ export default function ShareLightbox({ token, galleryId, files, current, onClos
           </button>
         )}
       </div>
-      {idx > 0 && <button className="absolute left-4 text-white p-2 z-10" onClick={(e) => { e.stopPropagation(); onNav(-1); }}><ChevronLeft size={30} /></button>}
-      {idx < files.length - 1 && <button className="absolute right-4 text-white p-2 z-10" onClick={(e) => { e.stopPropagation(); onNav(1); }}><ChevronRight size={30} /></button>}
+      {idx > 0 && <button className="absolute left-4 text-white p-2 z-10" onClick={(e) => { e.stopPropagation(); onNav(-1); }} data-testid="lb-prev"><ChevronLeft size={30} /></button>}
+      {idx < files.length - 1 && <button className="absolute right-4 text-white p-2 z-10" onClick={(e) => { e.stopPropagation(); onNav(1); }} data-testid="lb-next"><ChevronRight size={30} /></button>}
 
       <motion.div key={current.id} initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.25 }} className="relative max-w-5xl max-h-[85vh] px-4" onClick={(e) => e.stopPropagation()}>
         {current.file_type === "photo"

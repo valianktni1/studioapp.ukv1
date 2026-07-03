@@ -178,7 +178,7 @@ export default function AdminSettings() {
               );
             })}
           </div>
-          <p className="text-xs mt-4" style={{ color: "var(--sa-muted)" }}>Secure card payments via Stripe. PayPal coming soon.</p>
+          <p className="text-xs mt-4" style={{ color: "var(--sa-muted)" }}>Secure card payments via Stripe. Print-order payments are handled via PayPal (set up by the platform).</p>
         </div>
       )}
 

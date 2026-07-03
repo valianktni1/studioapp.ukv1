@@ -14,6 +14,12 @@ export default function PrintOrderModal({ token, accent, brand, onClose }) {
     pub.get(`/share/${token}/print-sizes`).then(({ data }) => { setSizes(data.sizes || []); setCurrency(data.currency || "GBP"); }).catch(() => {});
   }, [token]);
 
+  useEffect(() => {
+    const h = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, [onClose]);
+
   const bump = (id, d) => setQty((p) => ({ ...p, [id]: Math.max(0, (p[id] || 0) + d) }));
   const total = sizes.reduce((a, s) => a + (qty[s.id] || 0) * s.price, 0);
 
