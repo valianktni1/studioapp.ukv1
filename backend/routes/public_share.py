@@ -1,4 +1,5 @@
 import io
+import os
 import uuid
 import zipfile
 import jwt
@@ -308,6 +309,24 @@ async def public_tenant(subdomain: str):
         "secondary_color": t.get("secondary_color", "#0A0A0B"),
         "website": t.get("website"),
     }
+
+
+@router.get("/share/{token}/video-url/{file_id}")
+async def share_video_url(token: str, file_id: str):
+    """Returns a streaming URL: signed NGINX secure_link if configured, else the original via API."""
+    s = await _resolve_share(token)
+    f = await db.files.find_one({"id": file_id, "gallery_id": s["gallery_id"]})
+    if not f or f.get("file_type") != "video":
+        raise HTTPException(status_code=404, detail="Video not found")
+    from media import sign_video_uri
+    base = os.environ.get("NGINX_VIDEO_BASE_URL", "").rstrip("/")
+    stem = Path(f["filename"]).stem
+    if base and f.get("web_ready"):
+        uri = f"/video/{s['tenant_id']}/{s['gallery_id']}/{f['subfolder_slug']}/{stem}.web.mp4"
+        md5, expires = sign_video_uri(uri)
+        return {"url": f"{base}{uri}?md5={md5}&expires={expires}", "type": "web"}
+    public = os.environ.get("PUBLIC_BASE_URL", "").rstrip("/")
+    return {"url": f"{public}/api/media/original/{s['gallery_id']}/{f['subfolder_slug']}/{f['filename']}", "type": "original"}
 
 
 @router.get("/media/thumb/{gallery_id}/{subfolder_slug}/{filename}")

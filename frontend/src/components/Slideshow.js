@@ -170,7 +170,7 @@ export default function Slideshow({ galleryId, photos, couple, brand, accent, on
 
       {/* CONTROLS */}
       {phase === "playing" && (
-        <div className="absolute top-5 right-5 flex items-center gap-2 transition-opacity duration-500" style={{ opacity: showControls ? 1 : 0, zIndex: 10 }} data-testid="slideshow-controls">
+        <div className="absolute top-5 right-5 flex items-center gap-2 transition-opacity duration-500" style={{ opacity: showControls ? 1 : 0, pointerEvents: showControls ? "auto" : "none", zIndex: 10 }} data-testid="slideshow-controls">
           {track && <button onClick={toggleMute} className="p-2.5 rounded-full text-white" style={{ background: "rgba(255,255,255,0.14)", backdropFilter: "blur(8px)" }} data-testid="ss-mute">{muted ? <VolumeX size={18} /> : <Volume2 size={18} />}</button>}
           <button onClick={() => setPaused((p) => !p)} className="p-2.5 rounded-full text-white" style={{ background: "rgba(255,255,255,0.14)", backdropFilter: "blur(8px)" }} data-testid="ss-play">{paused ? <Play size={18} /> : <Pause size={18} />}</button>
           <button onClick={share} className="p-2.5 rounded-full text-white" style={{ background: "rgba(255,255,255,0.14)", backdropFilter: "blur(8px)" }} data-testid="ss-share"><Share2 size={18} /></button>

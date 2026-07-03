@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { X, ChevronLeft, ChevronRight, Heart, Download, Loader2 } from "lucide-react";
-import { mediaUrl, API } from "@/lib/api";
+import { mediaUrl } from "@/lib/api";
+import VideoPlayer from "@/components/VideoPlayer";
 
 // Progressive image: instant blurred thumb, crossfades to sharp preview.
 const ProgressiveShot = ({ galleryId, file }) => {
@@ -22,7 +23,7 @@ const ProgressiveShot = ({ galleryId, file }) => {
   );
 };
 
-export default function ShareLightbox({ galleryId, files, current, onClose, onNav, accent, logo, canDownload, faved, onFav, onDownload, dlPercent }) {
+export default function ShareLightbox({ token, galleryId, files, current, onClose, onNav, accent, logo, canDownload, faved, onFav, onDownload, dlPercent }) {
   const idx = files.findIndex((f) => f.id === current.id);
 
   // keyboard nav
@@ -63,7 +64,7 @@ export default function ShareLightbox({ galleryId, files, current, onClose, onNa
       <motion.div key={current.id} initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.25 }} className="relative max-w-5xl max-h-[85vh] px-4" onClick={(e) => e.stopPropagation()}>
         {current.file_type === "photo"
           ? <ProgressiveShot galleryId={galleryId} file={current} />
-          : <video src={`${API}/media/original/${galleryId}/${current.subfolder_slug}/${encodeURIComponent(current.filename)}`} controls autoPlay className="max-h-[85vh]" />}
+          : <VideoPlayer token={token} file={current} />}
         {logo && current.file_type === "photo" && <img src={logo} alt="" className="absolute bottom-3 right-6 pointer-events-none select-none" style={{ width: 110, opacity: 0.45 }} />}
       </motion.div>
 

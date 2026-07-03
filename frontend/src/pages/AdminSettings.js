@@ -19,6 +19,24 @@ export default function AdminSettings() {
   const [testTo, setTestTo] = useState("");
   const [plans, setPlans] = useState({});
   const [billingBusy, setBillingBusy] = useState("");
+  const [sizes, setSizes] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [currency, setCurrency] = useState("GBP");
+
+  useEffect(() => {
+    if (tab !== "prints") return;
+    tenantApi.get("/admin/print-sizes").then(({ data }) => { setSizes(data.sizes || []); setCurrency(data.currency || "GBP"); }).catch(() => {});
+    tenantApi.get("/admin/orders").then(({ data }) => setOrders(data || [])).catch(() => {});
+  }, [tab]);
+
+  const saveSizes = async () => {
+    try { const { data } = await tenantApi.put("/admin/print-sizes", { sizes }); setSizes(data.sizes); toast.success("Print sizes saved"); }
+    catch (err) { toast.error(apiError(err)); }
+  };
+  const setOrderStatus = async (o, status) => {
+    try { await tenantApi.put(`/admin/orders/${o.id}/status`, { status }); setOrders((p) => p.map((x) => x.id === o.id ? { ...x, status } : x)); }
+    catch (err) { toast.error(apiError(err)); }
+  };
 
   useEffect(() => {
     if (tenant) setBrand({
@@ -90,7 +108,7 @@ export default function AdminSettings() {
     } catch (err) { toast.error(apiError(err)); setBillingBusy(""); }
   };
 
-  const tabs = [["branding", "Branding"], ["billing", "Billing"], ["password", "Password"], ["email", "Email (SMTP)"], ["twofa", "2FA"]];
+  const tabs = [["branding", "Branding"], ["billing", "Billing"], ["prints", "Prints & Orders"], ["password", "Password"], ["email", "Email (SMTP)"], ["twofa", "2FA"]];
 
   return (
     <AdminShell>
@@ -188,6 +206,48 @@ export default function AdminSettings() {
       {tab === "twofa" && (
         <div className="sa-card p-8 max-w-xl" style={{ color: "var(--sa-muted)" }}>
           <p>TOTP two-factor authentication is coming in the next release.</p>
+        </div>
+      )}
+
+      {tab === "prints" && (
+        <div className="space-y-8">
+          <div className="sa-card p-8 max-w-2xl" data-testid="print-sizes-card">
+            <h3 className="font-display text-2xl mb-1">Print Sizes</h3>
+            <p className="text-sm mb-5" style={{ color: "var(--sa-muted)" }}>Offer prints to your clients. Prices in {currency}. Payments are collected via PayPal (configured by the platform).</p>
+            <div className="space-y-3">
+              {sizes.map((s, i) => (
+                <div key={s.id || i} className="grid grid-cols-12 gap-2 items-center" data-testid={`size-row-${i}`}>
+                  <input className="sa-input col-span-4" placeholder="Label (e.g. 8x10)" value={s.label} onChange={(e) => setSizes((p) => p.map((x, j) => j === i ? { ...x, label: e.target.value } : x))} data-testid={`size-label-${i}`} />
+                  <input className="sa-input col-span-4" placeholder="Dimensions (e.g. 8in x 10in)" value={s.dimensions} onChange={(e) => setSizes((p) => p.map((x, j) => j === i ? { ...x, dimensions: e.target.value } : x))} />
+                  <input type="number" step="0.01" className="sa-input col-span-3" placeholder="Price" value={s.price} onChange={(e) => setSizes((p) => p.map((x, j) => j === i ? { ...x, price: e.target.value } : x))} data-testid={`size-price-${i}`} />
+                  <button className="col-span-1 text-center" onClick={() => setSizes((p) => p.filter((_, j) => j !== i))} data-testid={`size-remove-${i}`} style={{ color: "#f87171" }}>✕</button>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-3 mt-5">
+              <button className="sa-btn-ghost" onClick={() => setSizes((p) => [...p, { id: "", label: "", dimensions: "", price: 0 }])} data-testid="add-size">+ Add size</button>
+              <button className="sa-btn" onClick={saveSizes} data-testid="save-sizes">Save sizes</button>
+            </div>
+          </div>
+
+          <div className="sa-card p-8" data-testid="orders-card">
+            <h3 className="font-display text-2xl mb-4">Print Orders</h3>
+            {orders.length === 0 ? <p className="text-sm" style={{ color: "var(--sa-muted)" }}>No orders yet.</p> : (
+              <div className="space-y-3">
+                {orders.map((o) => (
+                  <div key={o.id} className="flex flex-wrap items-center justify-between gap-3 p-3 rounded" style={{ border: "1px solid var(--sa-border)" }} data-testid={`order-${o.id}`}>
+                    <div>
+                      <div className="font-medium">{o.customer?.name || "—"} · {o.customer?.email}</div>
+                      <div className="text-xs" style={{ color: "var(--sa-muted)" }}>{o.items?.reduce((a, i) => a + i.qty, 0)} prints · {o.currency} {o.total?.toFixed(2)} · {new Date(o.created_at).toLocaleDateString()}</div>
+                    </div>
+                    <select className="sa-input !w-auto" value={o.status} onChange={(e) => setOrderStatus(o, e.target.value)} data-testid={`order-status-${o.id}`}>
+                      {["pending", "paid", "awaiting_contact", "printing", "shipped", "completed", "cancelled", "failed"].map((st) => <option key={st} value={st}>{st}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </AdminShell>

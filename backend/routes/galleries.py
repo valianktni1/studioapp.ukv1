@@ -188,6 +188,10 @@ async def upload_files(gid: str, subfolder: str = Form(...), files: list[UploadF
         await db.files.insert_one(doc)
         if ftype == "photo":
             _submit_thumb(doc["id"], gid, slug, uf.filename, str(fpath))
+        elif ftype == "video":
+            from media import process_video, transcode_executor
+            doc_id = doc["id"]
+            transcode_executor.submit(process_video, doc_id, gid, ctx["tenant_id"], slug, uf.filename, str(fpath))
         saved.append(clean(doc))
     await db.tenants.update_one({"id": ctx["tenant_id"]}, {"$set": {"storage_used_bytes": used}})
     return {"uploaded": len(saved), "files": saved}

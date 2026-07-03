@@ -26,6 +26,15 @@ export default function SuperAdminDashboard() {
   const [overview, setOverview] = useState(null);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ business_name: "", email: "", password: "", plan: "starter" });
+  const [showPaypal, setShowPaypal] = useState(false);
+  const [paypal, setPaypal] = useState({ client_id: "", secret: "", mode: "sandbox", currency: "GBP", configured: false });
+
+  const loadPaypal = () => superApi.get("/super-admin/paypal").then(({ data }) => setPaypal({ ...data, secret: "" })).catch(() => {});
+  const savePaypal = async (e) => {
+    e.preventDefault();
+    try { await superApi.put("/super-admin/paypal", paypal); toast.success("PayPal settings saved"); setShowPaypal(false); loadPaypal(); }
+    catch (err) { toast.error(apiError(err)); }
+  };
 
   const load = async () => {
     try {
@@ -41,6 +50,7 @@ export default function SuperAdminDashboard() {
   useEffect(() => {
     if (!localStorage.getItem(SUPER_TOKEN_KEY)) { nav("/super-admin"); return; }
     load();
+    loadPaypal();
   }, []);
 
   const createTenant = async (e) => {
@@ -99,6 +109,7 @@ export default function SuperAdminDashboard() {
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
+            <button className="sa-btn-ghost" onClick={() => setShowPaypal(true)} data-testid="paypal-settings-btn"><DollarSign size={16} /> Payments{paypal.configured ? " ✓" : ""}</button>
             <button className="sa-btn-ghost" onClick={logout} data-testid="super-logout"><LogOut size={16} /> Sign out</button>
           </div>
         </div>
@@ -188,6 +199,29 @@ export default function SuperAdminDashboard() {
             <div className="flex gap-3 pt-2">
               <button type="button" className="sa-btn-ghost flex-1" onClick={() => setShowCreate(false)}>Cancel</button>
               <button className="sa-btn flex-1" data-testid="ct-submit">Create</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {showPaypal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.7)" }} onClick={() => setShowPaypal(false)}>
+          <form onClick={(e) => e.stopPropagation()} onSubmit={savePaypal} className="sa-card p-8 w-full max-w-md space-y-4" data-testid="paypal-modal">
+            <h3 className="font-display text-2xl">PayPal — Print Payments</h3>
+            <p className="text-sm" style={{ color: "var(--sa-muted)" }}>Collect print-order payments platform-wide. Get keys at developer.paypal.com.</p>
+            <div><label className="sa-label block mb-2">Client ID</label><input className="sa-input" value={paypal.client_id} onChange={(e) => setPaypal({ ...paypal, client_id: e.target.value })} data-testid="pp-client-id" /></div>
+            <div><label className="sa-label block mb-2">Secret{paypal.configured ? " (saved — leave blank to keep)" : ""}</label><input type="password" className="sa-input" value={paypal.secret} onChange={(e) => setPaypal({ ...paypal, secret: e.target.value })} placeholder={paypal.configured ? "••••••••" : ""} data-testid="pp-secret" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="sa-label block mb-2">Mode</label>
+                <select className="sa-input" value={paypal.mode} onChange={(e) => setPaypal({ ...paypal, mode: e.target.value })} data-testid="pp-mode">
+                  <option value="sandbox">Sandbox</option><option value="live">Live</option>
+                </select>
+              </div>
+              <div><label className="sa-label block mb-2">Currency</label><input className="sa-input" value={paypal.currency} onChange={(e) => setPaypal({ ...paypal, currency: e.target.value })} data-testid="pp-currency" /></div>
+            </div>
+            <div className="flex gap-3 pt-2">
+              <button type="button" className="sa-btn-ghost flex-1" onClick={() => setShowPaypal(false)}>Cancel</button>
+              <button className="sa-btn flex-1" data-testid="pp-save">Save</button>
             </div>
           </form>
         </div>

@@ -1,0 +1,32 @@
+{
+  "summary": "Phase 6 (Print Ordering + PayPal) fully validated. Backend: 11/11 pytest cases passed. Frontend: Super Admin PayPal modal saves & masks secret; Tenant Prints & Orders tab manages sizes and orders; Public share Order Prints modal opens, +/- steppers update total (2x GBP3.50=GBP7.00), email validation blocks empty email, order placed successfully via awaiting_contact path (PayPal not configured) with success toast 'Order received — will be in touch'.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "AdminSettings Prints & Orders", "issues": ["Dimensions input row lacks data-testid (only size-label-N and size-price-N exist, dimension input has no testid) — minor testability gap"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_8_phase6.py",
+    "/app/test_reports/pytest/iteration_8.xml"
+  ],
+  "action_items": [
+    "OPTIONAL: add data-testid='size-dim-N' to dimension inputs in AdminSettings print sizes rows for better testability."
+  ],
+  "critical_code_review_comments": [
+    "Backend orders.py: PayPal secret correctly masked in GET (only client_id/mode/currency/configured returned). Good.",
+    "PUT /super-admin/paypal preserves existing secret when body.secret is empty (allows re-save of client_id without re-entering secret). Confirmed & sensible.",
+    "Server computes totals from db.settings print_sizes (client-supplied prices ignored). Verified 2 x GBP3.50 = 7.00.",
+    "Zero qty items filtered out; 400 returned if no items or missing email. Good.",
+    "MongoDB _id excluded via clean() helper in /admin/orders. Verified."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration_8_phase6.py"],
+  "success_rate": {"backend": "100% (11/11)", "frontend": "100% for tested flows"},
+  "test_credentials": "SA: superadmin/Stu!d10App_2026xQ; Tenant: demo@studio-app.uk/Demo!2026; Share token: eva-ella-27-06-26",
+  "seed_data_creation": "Created a print order (2x 6x4 = GBP7.00, status contacted then re-created via UI), and tenant print sizes [6x4 £3.50, 8x6 £6.00]. Cleared PayPal config at end.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "PayPal config was cleared at end of tests (client_id emptied). Real PayPal end-to-end payment cannot be tested; only the awaiting_contact path is validated in this env."
+}

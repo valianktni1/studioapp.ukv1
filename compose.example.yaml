@@ -27,6 +27,8 @@ services:
       - STRIPE_API_KEY=REPLACE_WITH_YOUR_STRIPE_SECRET_KEY
       - EMERGENT_LLM_KEY=REPLACE_WITH_YOUR_EMERGENT_LLM_KEY
       - PUBLIC_BASE_URL=https://studioappgallery.uk
+      - NGINX_VIDEO_BASE_URL=https://video.studioappgallery.uk
+      - VAAPI_DEVICE=/dev/dri/renderD128
     volumes:
       - /mnt/photographers_data/studioapp_userdata/uploads:/data/userfiles
       - /mnt/photographers_data/studioapp_userdata/backups:/backup

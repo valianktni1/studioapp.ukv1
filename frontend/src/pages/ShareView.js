@@ -7,6 +7,7 @@ import { pub, mediaUrl, apiError } from "@/lib/api";
 import useTitle from "@/lib/useTitle";
 import ShareLightbox from "@/components/ShareLightbox";
 import Slideshow from "@/components/Slideshow";
+import PrintOrderModal from "@/components/PrintOrderModal";
 
 const sid = (() => {
   let s = sessionStorage.getItem("sa_sid");
@@ -51,6 +52,7 @@ export default function ShareView() {
   const [lightbox, setLightbox] = useState(null);
   const [dl, setDl] = useState({});
   const [slideshow, setSlideshow] = useState(false);
+  const [prints, setPrints] = useState(false);
   const [light, setLight] = useState(() => localStorage.getItem("gallery_dark_mode") === "light");
   const guestInput = useRef();
 
@@ -65,6 +67,22 @@ export default function ShareView() {
       setMeta(data); setNeedPw(data.needs_password);
       if (!data.needs_password) loadFiles();
     }).catch((e) => setError(apiError(e)));
+  }, [token]); // eslint-disable-line
+
+  // PayPal print-order return
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const oid = sp.get("print_paid");
+    const ppToken = sp.get("token");
+    if (oid && ppToken) {
+      pub.post(`/share/${token}/print-order/${oid}/capture`, { paypal_order_id: ppToken })
+        .then(({ data }) => toast[data.paid ? "success" : "error"](data.paid ? "Payment complete — thank you! Your prints are on the way." : "Payment could not be completed."))
+        .catch((e) => toast.error(apiError(e)))
+        .finally(() => window.history.replaceState({}, "", `/s/${token}`));
+    } else if (sp.get("print_cancel")) {
+      toast.info("Print order cancelled.");
+      window.history.replaceState({}, "", `/s/${token}`);
+    }
   }, [token]); // eslint-disable-line
 
   const applyData = (d) => {
@@ -185,7 +203,7 @@ export default function ShareView() {
     : data.files.filter((f) => f.subfolder === openAlbum);
   const idx = lightbox ? albumFiles.findIndex((f) => f.id === lightbox.id) : -1;
 
-  const openPrints = () => toast.info("Print ordering is coming soon.");
+  const openPrints = () => setPrints(true);
   const openSlideshow = () => {
     const photos = albumFiles.filter((f) => f.file_type === "photo" && f.has_thumb);
     if (!photos.length) return toast.info("No photos to show yet.");
@@ -272,6 +290,7 @@ export default function ShareView() {
         </main>
 
         <footer className="studio-footer">Site Designed &amp; Hosted by <span style={{ color: accent, fontWeight: 700 }}>StudioApp</span></footer>
+        {prints && <PrintOrderModal token={token} accent={accent} brand={brand} onClose={() => setPrints(false)} />}
       </div>
     );
   }
@@ -359,6 +378,7 @@ export default function ShareView() {
 
       {lightbox && (
         <ShareLightbox
+          token={token}
           galleryId={data.gallery_id}
           files={albumFiles}
           current={lightbox}
