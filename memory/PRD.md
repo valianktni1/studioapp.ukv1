@@ -89,3 +89,16 @@ Turn a single-tenant wedding photography gallery system into a **multi-tenant Sa
 - Public signup POST /api/admin/register -> creates tenant+admin, auto subdomain, starts **7-day free trial** (subscription_status="trialing", trial_ends_at=now+7d), auto-login -> onboarding. Landing/login CTAs wired to /signup.
 - Trial enforcement: write actions (create gallery, upload, create share) return 402 once trial expired & unpaid; login + billing remain reachable so they can pay. Stripe payment -> subscription_status="active", trial cleared.
 - Super admin trial control: PUT /api/super-admin/tenants/{id}/trial {days:N} (extend, adds to remaining) or {unlimited:true} (comp = free forever). Dashboard shows Trial·Xd / Active / Comp·Unlimited / Trial ended, with +7d and ∞ (comp) buttons per tenant.
+
+## Fork continuation (2026-06 — video pipeline alignment)
+- P0 FIXED & TESTED (iteration_13, backend 8/8 + frontend 100%): Aligned video pipeline to reference repo `180226galleryrepo`.
+  - `media.py video_poster()`: was using ffmpeg INPUT seeking (`-ss 1 -i`) with no fallback → thumbnails silently failed. Now uses OUTPUT seeking (`-i <src> -ss 00:00:01 -vframes 1 -q:v 2`) with fallback to frame 0. Verified: has_thumb=True in ~1s, /api/media/thumb serves valid JPEG.
+  - `media.py transcode_web()`: now writes to `{stem}.web.tmp.mp4` then renames to `{stem}.web.mp4` on success (no partial files served). GPU VAAPI first → CPU fallback. .web.mp4 produced, no leftover tmp.
+  - `compose.example.yaml`: added `group_add: ["44","993"]` on backend service so container has render/video group perms → the real cause of GPU→CPU fallback on TrueNAS (device was passed but group perms missing). USER MUST VERIFY GPU on Minisforum 780M (no GPU in preview pod).
+- P1 DONE & TESTED: Added reference-parity "Thank You" modal to ShareView after favourites submit (data-testid thank-you-modal / thank-you-close), tenant-branded.
+
+## Remaining backlog (post-fork)
+- P1: Chunked large-file uploads for 40GB+ videos. NOTE: galleries.upload_files currently does `await uf.read()` (full bytes in memory) → OOM risk on big/concurrent uploads; switch to streaming `shutil.copyfileobj(uf.file, ...)`.
+- P1: PayPal webhook for bulletproof payment capture (currently manual redirect capture).
+- P1: Share album select-mode + bulk delete (reference has it via guestDeleteFiles; needs a new backend delete endpoint in public_share.py). Deferred — not yet ported.
+- P2: "Download favourites only" ZIP button. Clean up demo tenants. 2FA (pyotp). Live visitor tracking + activity archiving.
