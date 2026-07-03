@@ -37,6 +37,31 @@ export default function AdminSettings() {
     catch (err) { toast.error(apiError(err)); }
   };
 
+  const [smtpBusy, setSmtpBusy] = useState(false);
+  const [smtpHasPw, setSmtpHasPw] = useState(false);
+  useEffect(() => {
+    tenantApi.get("/admin/settings/smtp").then(({ data }) => {
+      setSmtp({ smtp_host: data.smtp_host || "", smtp_port: data.smtp_port || 587, smtp_email: data.smtp_email || "", sender_name: data.sender_name || "", smtp_password: "" });
+      setSmtpHasPw(!!data.has_password);
+    }).catch(() => {});
+  }, []);
+
+  const saveSmtp = async (e) => {
+    e.preventDefault();
+    setSmtpBusy(true);
+    try { await tenantApi.post("/admin/settings/smtp", smtp); toast.success("Email settings saved"); if (smtp.smtp_password) setSmtpHasPw(true); setSmtp({ ...smtp, smtp_password: "" }); }
+    catch (err) { toast.error(apiError(err)); }
+    finally { setSmtpBusy(false); }
+  };
+
+  const testSmtp = async () => {
+    if (!testTo) return toast.error("Enter a recipient email to test");
+    setSmtpBusy(true);
+    try { await tenantApi.post("/admin/settings/smtp/test", { to: testTo }); toast.success(`Test email sent to ${testTo}`); }
+    catch (err) { toast.error(apiError(err)); }
+    finally { setSmtpBusy(false); }
+  };
+
   // Billing: load plans + poll after Stripe redirect
   useEffect(() => { tenantApi.get("/billing/plans").then(({ data }) => setPlans(data)).catch(() => {}); }, []);
 
@@ -133,9 +158,35 @@ export default function AdminSettings() {
         </form>
       )}
 
-      {(tab === "email" || tab === "twofa") && (
+      {tab === "email" && (
+        <form onSubmit={saveSmtp} className="sa-card p-8 max-w-xl space-y-5" data-testid="smtp-form">
+          <div>
+            <h3 className="font-display text-2xl mb-1">Email (SMTP)</h3>
+            <p className="text-sm" style={{ color: "var(--sa-muted)" }}>Send branded "gallery ready" emails to your clients from your own address.</p>
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="col-span-2"><label className="sa-label block mb-2">SMTP host</label><input className="sa-input" value={smtp.smtp_host} onChange={(e) => setSmtp({ ...smtp, smtp_host: e.target.value })} placeholder="smtp.hostinger.com" data-testid="smtp-host" /></div>
+            <div><label className="sa-label block mb-2">Port</label><input type="number" className="sa-input" value={smtp.smtp_port} onChange={(e) => setSmtp({ ...smtp, smtp_port: e.target.value })} placeholder="465" data-testid="smtp-port" /></div>
+          </div>
+          <div><label className="sa-label block mb-2">From email</label><input className="sa-input" value={smtp.smtp_email} onChange={(e) => setSmtp({ ...smtp, smtp_email: e.target.value })} placeholder="hello@yourstudio.com" data-testid="smtp-email" /></div>
+          <div><label className="sa-label block mb-2">Sender name</label><input className="sa-input" value={smtp.sender_name} onChange={(e) => setSmtp({ ...smtp, sender_name: e.target.value })} placeholder={tenant?.business_name || "Your Studio"} data-testid="smtp-sender" /></div>
+          <div><label className="sa-label block mb-2">Password{smtpHasPw ? " (saved — leave blank to keep)" : ""}</label><input type="password" className="sa-input" value={smtp.smtp_password} onChange={(e) => setSmtp({ ...smtp, smtp_password: e.target.value })} placeholder={smtpHasPw ? "••••••••" : "SMTP password"} data-testid="smtp-password" /></div>
+          <div className="flex gap-3">
+            <button type="submit" className="sa-btn" disabled={smtpBusy} data-testid="smtp-save">{smtpBusy ? "Saving…" : "Save email settings"}</button>
+          </div>
+          <div className="pt-4" style={{ borderTop: "1px solid var(--sa-border)" }}>
+            <label className="sa-label block mb-2">Send a test email</label>
+            <div className="flex gap-3">
+              <input className="sa-input flex-1" value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="you@example.com" data-testid="smtp-test-to" />
+              <button type="button" className="sa-btn-ghost" disabled={smtpBusy} onClick={testSmtp} data-testid="smtp-test-btn">Send test</button>
+            </div>
+          </div>
+        </form>
+      )}
+
+      {tab === "twofa" && (
         <div className="sa-card p-8 max-w-xl" style={{ color: "var(--sa-muted)" }}>
-          <p>{tab === "email" ? "Per-studio SMTP configuration" : "TOTP two-factor authentication"} is coming in the next release.</p>
+          <p>TOTP two-factor authentication is coming in the next release.</p>
         </div>
       )}
     </AdminShell>

@@ -5,6 +5,7 @@ import { LogIn } from "lucide-react";
 import { pub, TENANT_TOKEN_KEY, apiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import Footer from "@/components/Footer";
+import useTitle from "@/lib/useTitle";
 
 export default function AdminLogin() {
   const [email, setEmail] = useState("");

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, Link } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowLeft, Upload, Trash2, Link2, Plus, Copy, Power, Star, Loader2 } from "lucide-react";
+import { ArrowLeft, Upload, Trash2, Link2, Plus, Copy, Power, Star, Loader2, Mail } from "lucide-react";
 import AdminShell from "@/components/AdminShell";
 import { tenantApi, mediaUrl, apiError, formatBytes } from "@/lib/api";
 import useTitle from "@/lib/useTitle";
@@ -17,6 +17,9 @@ export default function AdminGalleryDetail() {
   const [shares, setShares] = useState([]);
   const [showShare, setShowShare] = useState(false);
   const [shareForm, setShareForm] = useState({ subfolder: "", password: "", access_level: "download", label: "", expires_at: "", guest_upload_mode: false });
+  const [showNotify, setShowNotify] = useState(false);
+  const [notify, setNotify] = useState({ to: "", share_url: "", password: "", message: "" });
+  const [notifyBusy, setNotifyBusy] = useState(false);
   const fileInput = useRef();
 
   const load = useCallback(async () => {
@@ -85,6 +88,22 @@ export default function AdminGalleryDetail() {
   const toggleShare = async (s) => { try { await tenantApi.put(`/admin/shares/${s.id}/toggle`); loadShares(); } catch (err) { toast.error(apiError(err)); } };
   const delShare = async (s) => { if (!window.confirm("Delete this link?")) return; try { await tenantApi.delete(`/admin/shares/${s.id}`); loadShares(); } catch (err) { toast.error(apiError(err)); } };
 
+  const openNotify = () => {
+    const first = shares.find((s) => s.is_active) || shares[0];
+    const url = first ? `${window.location.origin}/s/${first.custom_slug || first.token}` : "";
+    setNotify({ to: gallery.client_email || "", share_url: url, password: "", message: "" });
+    setShowNotify(true);
+  };
+  const sendNotify = async (e) => {
+    e.preventDefault();
+    setNotifyBusy(true);
+    try {
+      await tenantApi.post(`/admin/galleries/${id}/notify`, notify);
+      toast.success(`Email sent to ${notify.to}`); setShowNotify(false);
+    } catch (err) { toast.error(apiError(err)); }
+    finally { setNotifyBusy(false); }
+  };
+
   if (!gallery) return <AdminShell><div style={{ color: "var(--sa-muted)" }}>Loading…</div></AdminShell>;
 
   const activeFiles = gallery.files.filter((f) => f.subfolder === active);
@@ -97,7 +116,10 @@ export default function AdminGalleryDetail() {
           <h1 className="font-display text-4xl">{gallery.folder_name}</h1>
           <p style={{ color: "var(--sa-muted)" }}>{gallery.total_files} files{gallery.client_email ? ` · ${gallery.client_email}` : ""}</p>
         </div>
-        <button className="sa-btn" onClick={() => setShowShare(true)} data-testid="new-share-btn"><Link2 size={16} /> Create Share Link</button>
+        <div className="flex items-center gap-3">
+          <button className="sa-btn-ghost" onClick={openNotify} data-testid="notify-btn"><Mail size={16} /> Notify Client</button>
+          <button className="sa-btn" onClick={() => setShowShare(true)} data-testid="new-share-btn"><Link2 size={16} /> Create Share Link</button>
+        </div>
       </div>
 
       {/* Shares */}
@@ -187,6 +209,28 @@ export default function AdminGalleryDetail() {
             <div className="flex gap-3 pt-2">
               <button type="button" className="sa-btn-ghost flex-1" onClick={() => setShowShare(false)}>Cancel</button>
               <button className="sa-btn flex-1" data-testid="sh-submit">Create</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {showNotify && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.7)" }} onClick={() => setShowNotify(false)}>
+          <form onClick={(e) => e.stopPropagation()} onSubmit={sendNotify} className="sa-card p-8 w-full max-w-md space-y-4" data-testid="notify-modal">
+            <h3 className="font-display text-2xl">Notify Client</h3>
+            <p className="text-sm" style={{ color: "var(--sa-muted)" }}>Send a branded "your gallery is ready" email.</p>
+            <div><label className="sa-label block mb-2">Client email</label><input type="email" className="sa-input" value={notify.to} onChange={(e) => setNotify({ ...notify, to: e.target.value })} required placeholder="couple@example.com" data-testid="nf-to" /></div>
+            <div><label className="sa-label block mb-2">Share link</label>
+              <select className="sa-input" value={notify.share_url} onChange={(e) => setNotify({ ...notify, share_url: e.target.value })} data-testid="nf-share">
+                {shares.length === 0 && <option value="">No share links — create one first</option>}
+                {shares.map((s) => <option key={s.id} value={`${window.location.origin}/s/${s.custom_slug || s.token}`}>{s.label || (s.custom_slug || s.token)}{s.is_active ? "" : " (inactive)"}</option>)}
+              </select>
+            </div>
+            <div><label className="sa-label block mb-2">Password to include (optional)</label><input className="sa-input" value={notify.password} onChange={(e) => setNotify({ ...notify, password: e.target.value })} placeholder="If the link is password-protected" data-testid="nf-password" /></div>
+            <div><label className="sa-label block mb-2">Personal message (optional)</label><textarea className="sa-input" rows={3} value={notify.message} onChange={(e) => setNotify({ ...notify, message: e.target.value })} data-testid="nf-message" /></div>
+            <div className="flex gap-3 pt-2">
+              <button type="button" className="sa-btn-ghost flex-1" onClick={() => setShowNotify(false)}>Cancel</button>
+              <button className="sa-btn flex-1" disabled={notifyBusy || !notify.to} data-testid="nf-submit">{notifyBusy ? "Sending…" : "Send email"}</button>
             </div>
           </form>
         </div>

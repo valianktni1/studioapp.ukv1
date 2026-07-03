@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration 3 (per-tenant SMTP suite + AdminLogin useTitle crash fix) verified. Backend: 9/9 pytest cases pass for GET/POST /api/admin/settings/smtp, POST /settings/smtp/test, POST /api/admin/galleries/{gid}/notify, GET /api/admin/email-log. Frontend: /login loads without runtime error (useTitle fix confirmed), demo tenant logs in and reaches /admin, Settings > Email (SMTP) tab saves & masks password on reload (`smtp-password` value is empty with `••••••••` placeholder and backend has_password=true), Send test button hits /settings/smtp/test and surfaces an error toast without crashing, gallery detail Notify Client button opens the notify modal with pre-populated share-link dropdown and submit calls /notify surfacing an error toast on SMTP failure.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/admin/settings/smtp/test", "issue": "Real SMTP call to unreachable host takes ~20s and hits the Cloudflare/ingress 100s idle-ish timeout — response comes back as a Cloudflare 502 HTML page instead of the backend's JSON {detail:'Email send failed: ...'}. Backend logic is correct; in production with reachable SMTP or with a shorter smtplib timeout (e.g. 5s) the backend's own 502 JSON would reach the client. Consider reducing smtplib.SMTP(..., timeout=20) to timeout=5 so the JSON error is preserved."},
+      {"endpoint": "POST /api/admin/galleries/{gid}/notify", "issue": "Same SMTP-timeout-vs-Cloudflare-timeout race as above; error still surfaces as a toast but its content is Cloudflare's HTML snippet rather than a friendly 'Email failed to send' message."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "SMTP Send test / Notify Client submit", "issue": "When the backend times out during real SMTP attempt, the toast displays the raw Cloudflare HTML fragment ('The origin web server returned an invalid or incomplete response to Cloudflare...') because the frontend surfaces err.response?.data?.detail || err.message. Front-end should fall back to a friendly 'Could not send email — check SMTP settings' when detail is HTML or the status is 502/504.", "affected_selectors": ["[data-testid=smtp-test-btn]", "[data-testid=nf-submit]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_3.py",
+    "/app/test_reports/pytest/iteration_3.xml"
+  ],
+  "action_items": [
+    "In routes/email.py lower smtplib timeout from 20 to ~5s so the backend's own 502 JSON reaches the client before Cloudflare's 502 HTML page is served, giving photographers an actionable error message.",
+    "In AdminSettings.js `sendTest` and AdminGalleryDetail.js notify submit, if err.response is missing/HTML or status ∈ {502,504}, show a canned friendly toast ('Could not send email — check your SMTP settings and try again') instead of the raw Cloudflare HTML."
+  ],
+  "critical_code_review_comments": [
+    "routes/email.py stores smtp_password in plaintext in db.settings.value.smtp_password. GET masks it in the API response, but the DB record itself is unencrypted. Consider Fernet-encrypting the password at rest.",
+    "routes/email.py `_send` uses smtplib synchronously inside async endpoints — will block the FastAPI event loop for up to 20s per request. Wrap _send in `await run_in_threadpool(_send, ...)` or use aiosmtplib.",
+    "notify_couple builds HTML with user-provided `message` and `pwd` via f-string — no HTML escaping. A malicious tenant could inject arbitrary HTML/script into their own outgoing email; low severity (self-XSS) but consider html.escape(message) and html.escape(pwd).",
+    "email.py `_get_smtp` returns a raw dict from Mongo which still includes `_id` when passed through code paths that don't filter it. Currently only value sub-doc is used so safe, but be defensive.",
+    "test_smtp uses `cfg.get('sender_name') or cfg['smtp_email']` — if smtp is not configured at all `cfg` is None and the raise 400 fires first, but a stricter early-return in `_send` guarding None cfg would be cleaner."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration_3.py (new — 9 tests covering SMTP settings, masked password, test-send graceful failure, notify graceful failure, email-log)"
+  ],
+  "success_rate": {"backend": "100% (9/9)", "frontend": "100% (all 4 requested flows verified)"},
+  "test_credentials": "superadmin / Stu!d10App_2026xQ ; demo@studio-app.uk / Demo!2026",
+  "seed_data_creation": "Only transient TEST_ galleries created and deleted by tests; SMTP settings for demo tenant are now populated with smtp.example.com/587/test@example.com — main agent may want to clear these post-testing.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run `cd /app && python -m pytest backend/tests/ -v` for full regression. Note that /settings/smtp/test and /galleries/{gid}/notify will always timeout in preview (unreachable SMTP) — a Cloudflare 502 with HTML toast is the expected/pass outcome, not a bug. If backend timeout is reduced to 5s (see action items) tests should be updated to assert response.json().detail contains 'Email send failed'.",
+  "rca of the issue": "The AdminLogin useTitle ReferenceError crash reported in the request no longer reproduces — /login renders cleanly with the sign-in form and no page errors, confirming the missing import was added. All SMTP endpoints and Notify modal are wired correctly; the only observable rough edge is that when SMTP hosts are unreachable the backend's 20s socket timeout is longer than Cloudflare's idle threshold, so the browser sees Cloudflare's own 502 HTML page instead of the backend's JSON error — the frontend faithfully forwards this HTML into a Sonner toast."
+}
