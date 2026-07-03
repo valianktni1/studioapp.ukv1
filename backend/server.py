@@ -124,6 +124,10 @@ async def startup():
 
     import asyncio
     from routes.email import run_expiry_reminders
+    from db import resolve_public_base
+
+    if not resolve_public_base():
+        logger.warning("PUBLIC_BASE_URL (and ROOT_DOMAIN) are not set — gallery links in emails/logos will be disabled until you set PUBLIC_BASE_URL (e.g. https://studioappgallery.uk).")
 
     async def _expiry_loop():
         while True:
