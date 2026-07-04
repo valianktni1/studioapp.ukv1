@@ -12,7 +12,7 @@ from db import db, resolve_public_base
 from auth_utils import verify_password, get_jwt_secret
 from media import (
     slugify, file_type_for, gallery_dir, cache_dir,
-    generate_image_derivatives,
+    generate_image_derivatives, remove_path,
 )
 
 router = APIRouter(prefix="/api", tags=["public-share"])
@@ -88,6 +88,7 @@ async def share_meta(token: str):
         "share_id": s["id"],
         "needs_password": bool(s.get("has_password")),
         "access_level": s.get("access_level"),
+        "allow_delete": s.get("access_level") == "full",
         "guest_upload_mode": s.get("guest_upload_mode", False),
         "gallery_name": g.get("folder_name"),
         "gallery_id": g["id"],
@@ -107,6 +108,7 @@ async def _files_payload(s, g):
         "subfolders": subfolders,
         "covers": g.get("covers", {}),
         "access_level": s.get("access_level"),
+        "allow_delete": s.get("access_level") == "full",
         "guest_upload_mode": s.get("guest_upload_mode", False),
         "tenant": await _tenant_brand(s["tenant_id"]),
         "favourites_count": fav_count,
@@ -301,6 +303,32 @@ async def guest_upload(token: str, files: list[UploadFile] = File(...)):
         saved += 1
     await db.tenants.update_one({"id": s["tenant_id"]}, {"$set": {"storage_used_bytes": used}})
     return {"uploaded": saved}
+
+
+@router.post("/share/{token}/delete")
+async def guest_delete_files(token: str, payload: dict):
+    """Delete files from a share. Only allowed when access_level == 'full' (photographer-managed share)."""
+    s = await _resolve_share(token)
+    if s.get("access_level") != "full":
+        raise HTTPException(status_code=403, detail="Deleting not allowed on this share")
+    file_ids = payload.get("file_ids", [])
+    deleted = 0
+    freed = 0
+    for fid in file_ids:
+        f = await db.files.find_one({"id": fid, "gallery_id": s["gallery_id"]})
+        if not f:
+            continue
+        stem = Path(f["filename"]).stem
+        remove_path(gallery_dir(s["tenant_id"], s["gallery_id"], f["subfolder_slug"]) / f["filename"])
+        remove_path(cache_dir(s["gallery_id"], "thumbs") / f["subfolder_slug"] / f"{stem}.jpg")
+        remove_path(cache_dir(s["gallery_id"], "previews") / f["subfolder_slug"] / f"{stem}.jpg")
+        await db.files.delete_one({"id": fid})
+        await db.favourites.delete_many({"file_id": fid})
+        freed += f.get("file_size", 0)
+        deleted += 1
+    if freed:
+        await db.tenants.update_one({"id": s["tenant_id"]}, {"$inc": {"storage_used_bytes": -freed}})
+    return {"deleted": deleted}
 
 
 # ---------------- Media serving (capability = gallery_id uuid) ----------------

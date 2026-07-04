@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { Heart, Download, Sun, Moon, Upload, Lock, ArrowLeft, ShoppingBag, Play, FolderOpen, Check, Image as ImageIcon } from "lucide-react";
+import { Heart, Download, Sun, Moon, Upload, Lock, ArrowLeft, ShoppingBag, Play, FolderOpen, Check, Image as ImageIcon, Trash2, X } from "lucide-react";
 import { pub, API, mediaUrl, apiError } from "@/lib/api";
 import useTitle from "@/lib/useTitle";
 import ShareLightbox from "@/components/ShareLightbox";
@@ -54,6 +54,9 @@ export default function ShareView() {
   const [slideshow, setSlideshow] = useState(false);
   const [prints, setPrints] = useState(false);
   const [thankYou, setThankYou] = useState(null); // null | submitted count
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState(() => new Set());
+  const [confirmDel, setConfirmDel] = useState(false);
   const [light, setLight] = useState(() => localStorage.getItem("gallery_dark_mode") === "light");
   const guestInput = useRef();
 
@@ -199,6 +202,17 @@ export default function ShareView() {
   const couple = coupleName(data.gallery_name);
 
   const canDownload = ["download", "full"].includes(data.access_level);
+  const canDelete = data.access_level === "full" || data.allow_delete;
+
+  const toggleSelect = (id) => setSelected((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const exitSelect = () => { setSelectMode(false); setSelected(new Set()); };
+  const doDelete = async () => {
+    try {
+      const { data: r } = await pub.post(`/share/${token}/delete`, { file_ids: Array.from(selected) });
+      toast.success(`${r.deleted} file${r.deleted === 1 ? "" : "s"} deleted`);
+      setConfirmDel(false); exitSelect(); loadFiles(password);
+    } catch (err) { toast.error(apiError(err)); }
+  };
 
   // files for current album view
   const albumFiles = openAlbum === FAV_VIEW
@@ -305,7 +319,7 @@ export default function ShareView() {
     <div className={`${themeClass} min-h-screen flex flex-col`} style={{ background: "var(--sa-bg)", color: "var(--sa-text)" }} data-testid="share-view">
       <header className="sticky top-0 z-30 border-b" style={{ borderColor: "var(--sa-border)", background: "var(--sa-header-bg)", backdropFilter: "blur(16px)" }}>
         <div className="max-w-6xl mx-auto px-5 h-16 flex items-center justify-between gap-3">
-          <button onClick={() => { setOpenAlbum(null); window.scrollTo(0, 0); }} className="flex items-center gap-2 text-sm" style={{ color: "var(--sa-text)" }} data-testid="album-back">
+          <button onClick={() => { exitSelect(); setOpenAlbum(null); window.scrollTo(0, 0); }} className="flex items-center gap-2 text-sm" style={{ color: "var(--sa-text)" }} data-testid="album-back">
             <ArrowLeft size={17} /> <span className="hidden sm:inline">All albums</span>
           </button>
           <div className="text-center min-w-0">
@@ -313,9 +327,22 @@ export default function ShareView() {
             <div className="text-[11px] truncate" style={{ color: "var(--sa-muted)" }}>{couple} &middot; {albumFiles.length} {albumFiles.length === 1 ? "item" : "items"}</div>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => setOpenAlbum(FAV_VIEW)} className="sa-btn-ghost !py-2 !px-3" data-testid="header-favs"><Heart size={15} fill={accent} color={accent} /> {favCount}</button>
-            {!isFavView && !isVideoAlbum && <button onClick={openSlideshow} className="sa-btn-ghost !py-2 !px-3" data-testid="slideshow-btn"><Play size={15} /> <span className="hidden sm:inline">Slideshow</span></button>}
-            <button onClick={() => setLight((v) => !v)} className="sa-btn-ghost !p-2" data-testid="theme-toggle">{light ? <Moon size={15} /> : <Sun size={15} />}</button>
+            {selectMode ? (
+              <>
+                <button onClick={exitSelect} className="sa-btn-ghost !py-2 !px-3" data-testid="select-cancel"><X size={15} /> <span className="hidden sm:inline">Cancel</span></button>
+                <button onClick={() => selected.size && setConfirmDel(true)} disabled={!selected.size}
+                  className="sa-btn !py-2 !px-3" style={{ background: "#9F1239", opacity: selected.size ? 1 : 0.5 }} data-testid="bulk-delete-btn">
+                  <Trash2 size={15} /> Delete ({selected.size})
+                </button>
+              </>
+            ) : (
+              <>
+                <button onClick={() => setOpenAlbum(FAV_VIEW)} className="sa-btn-ghost !py-2 !px-3" data-testid="header-favs"><Heart size={15} fill={accent} color={accent} /> {favCount}</button>
+                {!isFavView && !isVideoAlbum && <button onClick={openSlideshow} className="sa-btn-ghost !py-2 !px-3" data-testid="slideshow-btn"><Play size={15} /> <span className="hidden sm:inline">Slideshow</span></button>}
+                {canDelete && !isFavView && <button onClick={() => setSelectMode(true)} className="sa-btn-ghost !py-2 !px-3" data-testid="select-mode-btn"><Check size={15} /> <span className="hidden sm:inline">Select</span></button>}
+                <button onClick={() => setLight((v) => !v)} className="sa-btn-ghost !p-2" data-testid="theme-toggle">{light ? <Moon size={15} /> : <Sun size={15} />}</button>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -351,7 +378,9 @@ export default function ShareView() {
         <div className="columns-2 sm:columns-3 lg:columns-4" style={{ columnGap: "0.75rem" }}>
           {albumFiles.map((f, i) => (
             <motion.div key={f.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: Math.min(i * 0.02, 0.5) }}
-              className="mb-3 break-inside-avoid rounded-lg overflow-hidden group relative cursor-pointer" style={{ border: "1px solid var(--sa-border)" }} onClick={() => setLightbox(f)} data-testid={`share-file-${f.id}`}>
+              className={`mb-3 break-inside-avoid rounded-lg overflow-hidden group relative cursor-pointer ${selectMode && selected.has(f.id) ? "ring-2" : ""}`}
+              style={{ border: "1px solid var(--sa-border)", ...(selectMode && selected.has(f.id) ? { boxShadow: `0 0 0 2px ${accent}` } : {}) }}
+              onClick={() => selectMode ? toggleSelect(f.id) : setLightbox(f)} data-testid={`share-file-${f.id}`}>
               {f.file_type === "photo" && f.has_thumb
                 ? <img src={mediaUrl("thumb", data.gallery_id, f.subfolder_slug, f.filename)} alt="" loading="lazy" className="w-full h-auto block" />
                 : f.file_type === "video"
@@ -363,10 +392,18 @@ export default function ShareView() {
                     </div>
                   : <div className="w-full flex items-center justify-center aspect-[4/3] text-xs" style={{ color: "var(--sa-muted)" }}>{f.file_type.toUpperCase()}</div>}
               {logo && f.file_type === "photo" && <img src={logo} alt="" className="absolute bottom-1.5 right-1.5 pointer-events-none select-none" style={{ width: 60, opacity: 0.7 }} />}
-              <button onClick={(e) => toggleFav(f, e)} className="absolute bottom-2 left-2 p-2 rounded-full transition-transform active:scale-95" style={{ background: favs[f.id] ? accent : "rgba(255,255,255,0.9)" }} data-testid={`fav-${f.id}`}>
-                <Heart size={15} fill={favs[f.id] ? "#fff" : "transparent"} color={favs[f.id] ? "#fff" : "#1a1a1a"} />
-              </button>
-              {canDownload && f.file_type !== "video" && dl[f.id] == null && (
+              {selectMode && (
+                <div className="absolute top-2 left-2 w-6 h-6 rounded flex items-center justify-center" data-testid={`select-checkbox-${f.id}`}
+                  style={{ background: selected.has(f.id) ? accent : "rgba(255,255,255,0.9)", border: `1px solid ${selected.has(f.id) ? accent : "#d4d4d8"}` }}>
+                  {selected.has(f.id) && <Check size={14} color="#fff" />}
+                </div>
+              )}
+              {!selectMode && (
+                <button onClick={(e) => toggleFav(f, e)} className="absolute bottom-2 left-2 p-2 rounded-full transition-transform active:scale-95" style={{ background: favs[f.id] ? accent : "rgba(255,255,255,0.9)" }} data-testid={`fav-${f.id}`}>
+                  <Heart size={15} fill={favs[f.id] ? "#fff" : "transparent"} color={favs[f.id] ? "#fff" : "#1a1a1a"} />
+                </button>
+              )}
+              {!selectMode && canDownload && f.file_type !== "video" && dl[f.id] == null && (
                 <button onClick={(e) => { e.stopPropagation(); downloadFile(f); }} className="absolute top-2 right-2 p-2 rounded-full opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: "rgba(0,0,0,0.55)" }} data-testid={`dl-${f.id}`}>
                   <Download size={15} color="#fff" />
                 </button>
@@ -415,6 +452,21 @@ export default function ShareView() {
 
       <footer className="studio-footer">Site Designed &amp; Hosted by <span style={{ color: accent, fontWeight: 700 }}>StudioApp</span></footer>
       {thankYou !== null && <ThankYouModal count={thankYou} accent={accent} brand={brand} onClose={() => setThankYou(null)} />}
+      {confirmDel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }} onClick={() => setConfirmDel(false)} data-testid="delete-confirm-modal">
+          <div className="sa-card p-8 max-w-md w-full text-center" onClick={(e) => e.stopPropagation()}>
+            <div className="w-16 h-16 mx-auto mb-5 rounded-full flex items-center justify-center" style={{ background: "rgba(159,18,57,0.12)" }}>
+              <Trash2 size={28} color="#9F1239" />
+            </div>
+            <h2 className="font-display italic text-3xl mb-2">Delete {selected.size} file{selected.size === 1 ? "" : "s"}?</h2>
+            <p className="text-sm mb-6" style={{ color: "var(--sa-muted)" }}>This permanently removes the selected files. This cannot be undone.</p>
+            <div className="flex gap-3 justify-center">
+              <button onClick={() => setConfirmDel(false)} className="sa-btn-ghost" data-testid="delete-cancel">Cancel</button>
+              <button onClick={doDelete} className="sa-btn" style={{ background: "#9F1239" }} data-testid="delete-confirm">Delete files</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

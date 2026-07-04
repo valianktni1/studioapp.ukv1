@@ -102,3 +102,9 @@ Turn a single-tenant wedding photography gallery system into a **multi-tenant Sa
 - P1: PayPal webhook for bulletproof payment capture (currently manual redirect capture).
 - P1: Share album select-mode + bulk delete (reference has it via guestDeleteFiles; needs a new backend delete endpoint in public_share.py). Deferred — not yet ported.
 - P2: "Download favourites only" ZIP button. Clean up demo tenants. 2FA (pyotp). Live visitor tracking + activity archiving.
+
+## Share select + bulk-delete ported from reference (2026-06)
+- Terminology: "client" of the SaaS = the PHOTOGRAPHER (tenant). The photographer's clients (couples/guests) use the share galleries.
+- Backend: POST /api/share/{token}/delete (public_share.py) — gated on access_level == "full" (returns allow_delete in share meta + files payload). Deletes original + thumb + preview + db record + favourites, decrements tenant storage_used_bytes. TESTED: 403 on download-level share; full E2E delete on full-access share works.
+- Frontend (ShareView.js): album view Select toggle (shown only when access_level=full), per-tile checkboxes + gold selection ring, header Cancel + "Delete (N)", confirmation modal. TESTED via screenshot, no JS errors.
+- GPU compose simplified to `devices: /dev/dri:/dev/dri` (no group_add/GID needed) — ffmpeg auto-uses 780M VAAPI or falls back to CPU, matching reference behaviour. No user host commands required.
