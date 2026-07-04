@@ -523,7 +523,7 @@ export default function Slideshow({ photos, galleryId, coupleName, onClose, shar
       {/* Branding */}
       <div className="absolute top-6 left-6 z-30 pointer-events-none"
         style={{ opacity: showControls && phase !== 'picking' ? 0.45 : 0, transition: 'opacity 1s ease' }}>
-        <p className="text-white/45 text-xs italic" style={{ fontFamily: 'Cormorant Garamond, serif' }}>Weddings By Mark</p>
+        <p className="text-white/45 text-xs italic" style={{ fontFamily: 'Cormorant Garamond, serif' }}>{(typeof localStorage !== 'undefined' && localStorage.getItem('gallery_studio_name')) || 'StudioApp'}</p>
       </div>
 
       <style>{`

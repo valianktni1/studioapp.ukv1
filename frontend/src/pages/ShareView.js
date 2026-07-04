@@ -13,7 +13,7 @@ import {
   ArrowLeft, Upload, Image as ImageIcon, Trash2, Check, CheckCircle, Printer, FileText, Play, PlayCircle, Moon, Sun
 } from "lucide-react";
 import {
-  getShareFiles, toggleShareFavourite, submitFavouritesToAlbum, downloadShareFile, getShareDownloadUrl, getShareFavouritesDownloadUrl, guestUpload, guestDeleteFiles, previewUrl, thumbUrl, trackGalleryView, trackDownload, sendHeartbeat, getErrorMessage, videoStreamUrl, getVideoPlaybackUrl
+  getShareFiles, toggleShareFavourite, submitFavouritesToAlbum, downloadShareFile, getShareDownloadUrl, getShareFavouritesDownloadUrl, guestUpload, guestDeleteFiles, previewUrl, thumbUrl, trackGalleryView, trackDownload, sendHeartbeat, getErrorMessage, videoStreamUrl, getVideoPlaybackUrl, getShareInfo, brandingAssetUrl
 } from "@/lib/api";
 import GuestUploadView from "@/pages/GuestUploadView";
 import Slideshow from "@/pages/Slideshow";
@@ -42,6 +42,7 @@ function ShareViewFull() {
   const guestInputRef = useRef(null);
 
   const [galleryName, setGalleryName] = useState("");
+  const [branding, setBranding] = useState({ business_name: "StudioApp", logo_url: "", contact_email: "", accent_color: "#D4AF37" });
   const [galleryId, setGalleryId] = useState(null);
   const [subfolders, setSubfolders] = useState([]);
   const [covers, setCovers] = useState({});
@@ -152,6 +153,7 @@ function ShareViewFull() {
     loadFiles();
     // Track gallery view
     trackGalleryView(token);
+    getShareInfo(token).then(({ data }) => { if (data.branding) { setBranding(data.branding); try { localStorage.setItem('gallery_studio_name', data.branding.business_name || ''); } catch (e) {} } }).catch(() => {});
   }, [token, navigate, loadFiles]);
 
   const handleFavourite = async (fileId) => {
@@ -398,7 +400,9 @@ function ShareViewFull() {
         <header className={heroImageUrl ? 'absolute top-0 left-0 right-0 z-20' : 'border-b'} style={heroImageUrl ? {} : { borderColor: darkMode ? '#333' : 'rgba(212,175,55,0.15)' }}>
           <div className="max-w-screen-xl mx-auto px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <img src="/logo.png" alt="Weddings By Mark" className="h-8" style={{ filter: (heroImageUrl || darkMode) ? 'brightness(0) invert(1)' : 'invert(1)' }} />
+              {branding.logo_url
+                ? <img src={brandingAssetUrl(branding.logo_url)} alt={branding.business_name} className="h-8 object-contain" style={{ maxWidth: 200 }} />
+                : <span className="text-2xl font-medium tracking-tight" style={{ fontFamily: 'Cormorant Garamond, serif', color: (heroImageUrl || darkMode) ? '#fff' : undefined }}>{branding.business_name}</span>}
             </div>
             <div className="flex items-center gap-3">
               {/* Dark mode toggle */}
@@ -526,7 +530,7 @@ function ShareViewFull() {
             </div>
 
             <p className="text-xs" style={{ fontFamily: 'Manrope, sans-serif', color: t.textMuted || '#A8A29E' }}>
-              Your selections will appear in your <strong style={{ color: t.headingColor }}>Album Favourites</strong> folder. Please email <a href="mailto:mark@perfectweddingsbymark.uk" className="underline" style={{ color: '#D4AF37' }}>mark@perfectweddingsbymark.uk</a> once submitted, including your chosen cover image number.
+              Your selections will appear in your <strong style={{ color: t.headingColor }}>Album Favourites</strong> folder. {branding.contact_email ? <>Please email <a href={`mailto:${branding.contact_email}`} className="underline" style={{ color: '#D4AF37' }}>{branding.contact_email}</a> once submitted, </> : null}including your chosen cover image number.
             </p>
           </motion.div>
         </section>
@@ -647,10 +651,10 @@ function ShareViewFull() {
                 <div className="h-px w-12" style={{ background: 'linear-gradient(to left, transparent, #D4AF37)' }}></div>
               </div>
               <p className="text-sm tracking-wide" style={{ fontFamily: 'Cormorant Garamond, serif', color: t.text }}>
-                Site Designed & Maintained by
+                Site Designed & Hosted by
               </p>
               <p className="text-xl font-medium italic mt-1" style={{ fontFamily: 'Cormorant Garamond, serif', color: t.headingColor }}>
-                Weddings By Mark
+                StudioApp
               </p>
             </div>
           </div>
@@ -848,10 +852,10 @@ function ShareViewFull() {
               <div className="h-px w-12" style={{ background: 'linear-gradient(to left, transparent, #D4AF37)' }}></div>
             </div>
             <p className="text-sm tracking-wide" style={{ fontFamily: 'Cormorant Garamond, serif', color: t.text }}>
-              Site Designed & Maintained by
+              Site Designed & Hosted by
             </p>
             <p className="text-xl font-medium italic mt-1" style={{ fontFamily: 'Cormorant Garamond, serif', color: t.headingColor }}>
-              Weddings By Mark
+              StudioApp
             </p>
           </div>
         </div>
@@ -1136,7 +1140,7 @@ function ThankYouModal({ show, onClose, count, galleryName, theme = {} }) {
           <p className="text-sm mb-6 p-3 rounded-lg" style={{ fontFamily: 'Manrope, sans-serif', color: text, backgroundColor: theme.bgAlt || '#FEF9E7' }}>
             <strong>Guys... please don't forget!</strong><br />
             Email Mark your chosen image for your front cover at{' '}
-            <a href="mailto:mark@perfectweddingsbymark.uk" className="underline font-medium" style={{ color: '#D4AF37' }}>mark@perfectweddingsbymark.uk</a>
+            <a href={`mailto:${branding.contact_email}`} className="underline font-medium" style={{ color: '#D4AF37' }}>{branding.contact_email || branding.business_name}</a>
           </p>
           <button
             onClick={onClose}

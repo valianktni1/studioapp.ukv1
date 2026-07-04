@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Upload, Camera, Check, Heart, Image as ImageIcon, Film } from "lucide-react";
-import { guestUpload, getGuestUploadCount, trackGalleryView, getErrorMessage } from "@/lib/api";
+import { guestUpload, getGuestUploadCount, trackGalleryView, getErrorMessage, getShareInfo, brandingAssetUrl } from "@/lib/api";
 
 export default function GuestUploadView({ galleryName }) {
   const { token } = useParams();
@@ -14,6 +14,7 @@ export default function GuestUploadView({ galleryName }) {
   const fileInputRef = useRef(null);
   
   const [uploading, setUploading] = useState(false);
+  const [branding, setBranding] = useState({ business_name: "StudioApp", logo_url: "" });
   const [uploadProgress, setUploadProgress] = useState(0);
   const [guestName, setGuestName] = useState("");
   const [uploadCount, setUploadCount] = useState(0);
@@ -43,6 +44,7 @@ export default function GuestUploadView({ galleryName }) {
     }
     fetchUploadCount();
     trackGalleryView(token);
+    getShareInfo(token).then(({ data }) => { if (data.branding) setBranding(data.branding); }).catch(() => {});
   }, [token, navigate, fetchUploadCount]);
 
   const handleUpload = async (fileList) => {
@@ -138,7 +140,9 @@ export default function GuestUploadView({ galleryName }) {
       {/* Header */}
       <header className="border-b" style={{ borderColor: 'rgba(212,175,55,0.15)' }}>
         <div className="max-w-screen-xl mx-auto px-6 py-4 flex items-center justify-center">
-          <img src="/logo.png" alt="Weddings By Mark" className="h-8" style={{ filter: 'invert(1)' }} />
+          {branding.logo_url
+            ? <img src={brandingAssetUrl(branding.logo_url)} alt={branding.business_name} className="h-8 object-contain" style={{ maxWidth: 200 }} />
+            : <span className="text-2xl font-medium tracking-tight" style={{ fontFamily: 'Cormorant Garamond, serif' }}>{branding.business_name}</span>}
         </div>
       </header>
 

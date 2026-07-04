@@ -23,6 +23,8 @@ apiClient.interceptors.request.use((config) => {
   let token;
   if (url.includes('/share/')) {
     token = localStorage.getItem('share_token');
+  } else if (url.includes('/super/')) {
+    token = localStorage.getItem('super_token');
   } else {
     token = localStorage.getItem('admin_token');
   }
@@ -36,7 +38,10 @@ apiClient.interceptors.response.use(
   (res) => res,
   (err) => {
     if (err.response?.status === 401) {
-      if (window.location.pathname.startsWith('/admin')) {
+      if (window.location.pathname.startsWith('/super')) {
+        localStorage.removeItem('super_token');
+        window.location.href = '/super';
+      } else if (window.location.pathname.startsWith('/admin')) {
         localStorage.removeItem('admin_token');
         window.location.href = '/admin';
       }
@@ -49,6 +54,24 @@ apiClient.interceptors.response.use(
 export const checkSetup = () => apiClient.get('/admin/check-setup');
 export const setupAdmin = (data) => apiClient.post('/admin/setup', data);
 export const loginAdmin = (data) => apiClient.post('/admin/login', data);
+
+// Super Admin
+export const superLogin = (data) => apiClient.post('/super/login', data);
+export const superListTenants = () => apiClient.get('/super/tenants');
+export const superCreateTenant = (data) => apiClient.post('/super/tenants', data);
+export const superSetStatus = (id, status) => apiClient.put(`/super/tenants/${id}/status?status=${status}`);
+export const superSetPlan = (id, plan) => apiClient.put(`/super/tenants/${id}/plan?plan=${plan}`);
+export const superDeleteTenant = (id) => apiClient.delete(`/super/tenants/${id}`);
+export const superPlans = () => apiClient.get('/super/plans');
+
+// Tenant branding
+export const getBranding = () => apiClient.get('/admin/branding');
+export const updateBranding = (data) => apiClient.put('/admin/branding', data);
+export const uploadBrandingLogo = (file) => {
+  const fd = new FormData(); fd.append('file', file);
+  return apiClient.post('/admin/branding/logo', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+};
+export const brandingAssetUrl = (path) => (path && path.startsWith('/api') ? `${BACKEND_URL}${path}` : path);
 export const changePassword = (data) => apiClient.put('/admin/change-password', data);
 
 // 2FA

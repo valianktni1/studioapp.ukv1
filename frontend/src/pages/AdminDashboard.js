@@ -12,18 +12,21 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import {
-  Camera, Plus, LogOut, FolderOpen, Share2, Trash2, Search, Copy, Layout, X, Settings, ArrowUpDown, Eye, HardDrive, Download, Users, CheckCircle, Monitor, Smartphone, Tablet, Film, Heart, Image as ImageIcon, Mail, Send, Clock, AlertCircle, FolderHeart
+  Camera, Plus, LogOut, FolderOpen, Share2, Trash2, Search, Copy, Layout, X, Settings, ArrowUpDown, Eye, HardDrive, Download, Users, CheckCircle, Monitor, Smartphone, Tablet, Film, Heart, Image as ImageIcon, Mail, Send, Clock, AlertCircle, FolderHeart, Palette
 } from "lucide-react";
 import {
-  listGalleries, createGallery, deleteGallery, getTemplates, createTemplate, deleteTemplate, thumbUrl, runBackup, getAllGalleriesStats, getLiveVisitors, getBroadcastPreview, sendBroadcastEmail, getDashboardStats
+  listGalleries, createGallery, deleteGallery, getTemplates, createTemplate, deleteTemplate, thumbUrl, runBackup, getAllGalleriesStats, getLiveVisitors, getBroadcastPreview, sendBroadcastEmail, getDashboardStats, getBranding, brandingAssetUrl
 } from "@/lib/api";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [galleries, setGalleries] = useState([]);
+  const [branding, setBranding] = useState({ business_name: "", logo_url: "" });
   const [templates, setTemplates] = useState([]);
   const [galleriesStats, setGalleriesStats] = useState({});
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => { getBranding().then(({ data }) => setBranding(data)).catch(() => {}); }, []);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("date_desc");
   const [showCreate, setShowCreate] = useState(false);
@@ -195,7 +198,9 @@ export default function AdminDashboard() {
       <header className="sticky top-0 z-40 border-b" style={{ backgroundColor: 'rgba(253,252,248,0.85)', backdropFilter: 'blur(16px)', borderColor: 'rgba(212,175,55,0.15)' }}>
         <div className="max-w-screen-xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="Weddings By Mark" className="h-8" style={{ filter: 'invert(1)' }} />
+            {branding.logo_url
+              ? <img src={brandingAssetUrl(branding.logo_url)} alt={branding.business_name} className="h-8 object-contain" data-testid="dash-logo" />
+              : <span className="text-2xl font-medium tracking-tight" style={{ fontFamily: 'Cormorant Garamond, serif' }} data-testid="dash-logo">{branding.business_name || 'StudioApp'}</span>}
           </div>
           <div className="flex items-center gap-2">
             <Button data-testid="backup-btn" variant="ghost" onClick={handleBackup} disabled={backingUp} className="text-[#57534E] rounded-sm gap-2 text-xs tracking-wider">
@@ -209,6 +214,9 @@ export default function AdminDashboard() {
             </Button>
             <Button data-testid="activity-btn" variant="ghost" onClick={() => navigate("/admin/activity")} className="text-[#57534E] rounded-sm gap-2 text-xs tracking-wider">
               <Eye className="w-4 h-4" /> Activity
+            </Button>
+            <Button data-testid="branding-btn" variant="ghost" onClick={() => navigate("/admin/branding")} className="text-[#57534E] rounded-sm gap-2 text-xs tracking-wider">
+              <Palette className="w-4 h-4" /> Branding
             </Button>
             <Button data-testid="settings-btn" variant="ghost" onClick={() => navigate("/admin/settings")} className="text-[#57534E] rounded-sm gap-2 text-xs tracking-wider">
               <Settings className="w-4 h-4" /> Settings

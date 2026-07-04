@@ -5,6 +5,8 @@ import AdminLogin from "@/pages/AdminLogin";
 import AdminDashboard from "@/pages/AdminDashboard";
 import AdminGalleryDetail from "@/pages/AdminGalleryDetail";
 import AdminSettings from "@/pages/AdminSettings";
+import SuperAdmin from "@/pages/SuperAdmin";
+import AdminBranding from "@/pages/AdminBranding";
 import AdminActivity from "@/pages/AdminActivity";
 import ShareAccess from "@/pages/ShareAccess";
 import ShareView from "@/pages/ShareView";
@@ -21,6 +23,8 @@ function App() {
           <Route path="/admin/galleries" element={<AdminDashboard />} />
           <Route path="/admin/gallery/:id" element={<AdminGalleryDetail />} />
           <Route path="/admin/settings" element={<AdminSettings />} />
+          <Route path="/admin/branding" element={<AdminBranding />} />
+          <Route path="/super" element={<SuperAdmin />} />
           <Route path="/admin/activity" element={<AdminActivity />} />
           <Route path="/s/:token" element={<ShareAccess />} />
           <Route path="/s/:token/view" element={<ShareView />} />

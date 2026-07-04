@@ -133,7 +133,7 @@ class AdminLogin(BaseModel):
 class AdminSetup(BaseModel):
     username: str
     password: str
-    display_name: str = "Weddings By Mark"
+    display_name: str = "My Studio"
 
 class TemplateCreate(BaseModel):
     name: str
@@ -254,6 +254,217 @@ async def get_share_session(authorization: str = Header(None)):
     if payload.get("tenant_id"):
         use_tenant(payload["tenant_id"])
     return payload
+
+# ─── Super Admin (platform owner) ───
+SUPER_ADMIN_USERNAME = os.environ.get("SUPER_ADMIN_USERNAME", "superadmin")
+SUPER_ADMIN_PASSWORD = os.environ.get("SUPER_ADMIN_PASSWORD", "Stu!d10App_2026xQ")
+
+PLANS = {
+    "starter": {"label": "Starter", "gallery_limit": 10, "price": 15},
+    "pro": {"label": "Professional", "gallery_limit": 30, "price": 35},
+    "studio": {"label": "Studio", "gallery_limit": 60, "price": 65},
+}
+
+DEFAULT_BRANDING = {
+    "business_name": "StudioApp", "logo_url": "", "accent_color": "#D4AF37",
+    "contact_email": "", "tagline": "",
+}
+
+async def ensure_super_admin():
+    existing = await control_db.super_admins.find_one({"username": SUPER_ADMIN_USERNAME})
+    if not existing:
+        await control_db.super_admins.insert_one({
+            "id": str(uuid.uuid4()), "username": SUPER_ADMIN_USERNAME,
+            "password": bcrypt.hashpw(SUPER_ADMIN_PASSWORD.encode(), bcrypt.gensalt()).decode(),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+
+async def get_super(authorization: str = Header(None)):
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    payload = verify_jwt(authorization.replace("Bearer ", ""))
+    if payload.get("role") != "super":
+        raise HTTPException(status_code=403, detail="Super admin only")
+    return payload
+
+async def get_tenant_branding(tenant_id):
+    if not tenant_id:
+        return dict(DEFAULT_BRANDING)
+    t = await control_db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+    if not t:
+        return dict(DEFAULT_BRANDING)
+    return {
+        "business_name": t.get("business_name") or "StudioApp",
+        "logo_url": t.get("logo_url") or "",
+        "accent_color": t.get("accent_color") or "#D4AF37",
+        "contact_email": t.get("contact_email") or "",
+        "tagline": t.get("tagline") or "",
+    }
+
+async def _provision_tenant(business_name, username, password, plan="starter", with_demo=True):
+    tenant_id = str(uuid.uuid4())
+    base_slug = slugify(business_name) or f"studio-{tenant_id[:6]}"
+    slug = base_slug
+    n = 2
+    while await control_db.tenants.find_one({"subdomain": slug}):
+        slug = f"{base_slug}-{n}"; n += 1
+    await control_db.tenants.insert_one({
+        "id": tenant_id, "subdomain": slug, "business_name": business_name,
+        "accent_color": "#D4AF37", "logo_url": "", "contact_email": "", "tagline": "",
+        "plan": plan, "status": "active",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    if username and password:
+        await control_db.admins.insert_one({
+            "id": str(uuid.uuid4()), "tenant_id": tenant_id, "username": username,
+            "password": bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode(),
+            "display_name": business_name, "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    use_tenant(tenant_id)
+    await db.templates.insert_one({
+        "id": str(uuid.uuid4()), "name": "Default Wedding",
+        "subfolders": list(DEFAULT_SUBFOLDERS), "is_default": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    if with_demo:
+        demo_name = "Demo - Emma & James 01.01.26"
+        await db.galleries.insert_one({
+            "id": str(uuid.uuid4()), "folder_name": demo_name,
+            "subfolders": list(DEFAULT_SUBFOLDERS), "template_id": None, "client_email": "",
+            "file_counts": {sf: 0 for sf in DEFAULT_SUBFOLDERS}, "is_demo": True,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        })
+        (get_gallery_path(demo_name) / "Wedding Images").mkdir(parents=True, exist_ok=True)
+    return tenant_id, slug
+
+class SuperLogin(BaseModel):
+    username: str
+    password: str
+
+class TenantCreate(BaseModel):
+    business_name: str
+    username: str
+    password: str
+    plan: str = "starter"
+
+@api_router.post("/super/login")
+async def super_login(data: SuperLogin):
+    sa = await control_db.super_admins.find_one({"username": data.username})
+    if not sa or not bcrypt.checkpw(data.password.encode(), sa["password"].encode()):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    token = create_jwt({"sub": sa["id"], "role": "super", "username": sa["username"]}, expires_hours=ADMIN_SESSION_HOURS)
+    return {"token": token, "username": sa["username"]}
+
+@api_router.get("/super/plans")
+async def super_plans(_super=Depends(get_super)):
+    return PLANS
+
+@api_router.get("/super/tenants")
+async def super_list_tenants(_super=Depends(get_super)):
+    tenants = await control_db.tenants.find({}, {"_id": 0}).sort("created_at", -1).to_list(10000)
+    out = []
+    for t in tenants:
+        use_tenant(t["id"])
+        try:
+            g = await db.galleries.count_documents({})
+        except Exception:
+            g = 0
+        admin = await control_db.admins.find_one({"tenant_id": t["id"]}, {"_id": 0, "username": 1})
+        t["gallery_count"] = g
+        t["admin_username"] = admin.get("username") if admin else None
+        t["plan_info"] = PLANS.get(t.get("plan", "starter"), PLANS["starter"])
+        out.append(t)
+    return out
+
+@api_router.post("/super/tenants")
+async def super_create_tenant(data: TenantCreate, _super=Depends(get_super)):
+    if await control_db.admins.find_one({"username": data.username}):
+        raise HTTPException(status_code=400, detail="Username already in use")
+    if data.plan not in PLANS:
+        raise HTTPException(status_code=400, detail="Invalid plan")
+    tenant_id, slug = await _provision_tenant(data.business_name, data.username, data.password, data.plan, with_demo=True)
+    return {"id": tenant_id, "subdomain": slug, "business_name": data.business_name, "plan": data.plan}
+
+@api_router.put("/super/tenants/{tenant_id}/status")
+async def super_set_status(tenant_id: str, status: str = Query(...), _super=Depends(get_super)):
+    if status not in ("active", "suspended"):
+        raise HTTPException(status_code=400, detail="Invalid status")
+    r = await control_db.tenants.update_one({"id": tenant_id}, {"$set": {"status": status}})
+    if r.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return {"status": status}
+
+@api_router.put("/super/tenants/{tenant_id}/plan")
+async def super_set_plan(tenant_id: str, plan: str = Query(...), _super=Depends(get_super)):
+    if plan not in PLANS:
+        raise HTTPException(status_code=400, detail="Invalid plan")
+    r = await control_db.tenants.update_one({"id": tenant_id}, {"$set": {"plan": plan}})
+    if r.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return {"plan": plan}
+
+@api_router.delete("/super/tenants/{tenant_id}")
+async def super_delete_tenant(tenant_id: str, _super=Depends(get_super)):
+    t = await control_db.tenants.find_one({"id": tenant_id})
+    if not t:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    client.drop_database(_tenant_db_name(tenant_id))
+    await control_db.admins.delete_many({"tenant_id": tenant_id})
+    await control_db.share_index.delete_many({"tenant_id": tenant_id})
+    await control_db.tenants.delete_one({"id": tenant_id})
+    tenant_files = UPLOAD_DIR / tenant_id
+    if tenant_files.exists():
+        shutil.rmtree(tenant_files, ignore_errors=True)
+    return {"success": True}
+
+# ─── Tenant branding (self-service) ───
+class BrandingUpdate(BaseModel):
+    business_name: Optional[str] = None
+    accent_color: Optional[str] = None
+    contact_email: Optional[str] = None
+    tagline: Optional[str] = None
+
+@api_router.get("/admin/branding")
+async def admin_get_branding(admin=Depends(get_admin)):
+    return await get_tenant_branding(admin.get("tenant_id"))
+
+@api_router.put("/admin/branding")
+async def admin_update_branding(data: BrandingUpdate, admin=Depends(get_admin)):
+    update = {k: v for k, v in data.dict().items() if v is not None}
+    if update:
+        await control_db.tenants.update_one({"id": admin["tenant_id"]}, {"$set": update})
+    return await get_tenant_branding(admin["tenant_id"])
+
+@api_router.post("/admin/branding/logo")
+async def admin_upload_logo(file: UploadFile = File(...), admin=Depends(get_admin)):
+    ext = (file.filename or "").rsplit(".", 1)[-1].lower() if "." in (file.filename or "") else ""
+    allowed = {"png", "jpg", "jpeg", "webp", "gif", "svg"}
+    if ext not in allowed:
+        raise HTTPException(status_code=400, detail="Upload a PNG, JPG, WEBP, GIF or SVG")
+    payload = await file.read()
+    if len(payload) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Logo must be under 5 MB")
+    tid = admin["tenant_id"]
+    asset_id = str(uuid.uuid4())
+    dest_dir = UPLOAD_DIR / tid / ".branding"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / f"logo-{asset_id}.{ext}"
+    with open(dest, "wb") as fh:
+        fh.write(payload)
+    logo_url = f"/api/public/branding-asset/{tid}/logo-{asset_id}.{ext}"
+    await control_db.tenants.update_one({"id": tid}, {"$set": {"logo_url": logo_url}})
+    return {"logo_url": logo_url}
+
+@api_router.get("/public/branding-asset/{tenant_id}/{filename}")
+async def serve_branding_asset(tenant_id: str, filename: str):
+    path = UPLOAD_DIR / tenant_id / ".branding" / filename
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="Not found")
+    ext = filename.rsplit(".", 1)[-1].lower()
+    ctypes = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp", "gif": "image/gif", "svg": "image/svg+xml"}
+    return FileResponse(str(path), media_type=ctypes.get(ext, "application/octet-stream"), headers={"Cache-Control": "public, max-age=3600"})
+
 
 # ─── File Helpers ───
 def is_image(filename: str) -> bool:
@@ -602,6 +813,8 @@ async def setup_admin(data: AdminSetup):
         "id": tenant_id,
         "subdomain": subdomain,
         "business_name": data.display_name,
+        "accent_color": "#D4AF37", "logo_url": "", "contact_email": "", "tagline": "",
+        "plan": "starter", "status": "active",
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
     hashed = bcrypt.hashpw(data.password.encode(), bcrypt.gensalt()).decode()
@@ -1433,7 +1646,7 @@ async def get_share_qr_frame(share_id: str, base_url: str = Query(...), token: O
         draw.text(((FW - tw) // 2, y), text, fill=fill, font=font)
     
     def add_brand(draw):
-        b = "Designed and hosted by Weddings By Mark"
+        b = "Designed & hosted by StudioApp"
         bf = sans_f(22)
         bbox = draw.textbbox((0, 0), b, font=bf)
         draw.text((FW - (bbox[2] - bbox[0]) - 60, FH - 60), b, fill='#AAAAAA', font=bf)
@@ -1722,7 +1935,8 @@ async def get_share_info(token: str):
         "allow_all_file_types": share.get("allow_all_file_types", False),
         "expires_at": share.get("expires_at"),
         "cover_url": cover_url,
-        "file_count": file_count
+        "file_count": file_count,
+        "branding": await get_tenant_branding(current_tenant_id()),
     }
 
 @api_router.post("/share/{token}/access")
@@ -3450,8 +3664,7 @@ Enjoy your photos&mdash;it was such an honour to capture your big day!
 
 <p style="font-size:15px;color:#1C1917;margin:0;line-height:1.8;">
 Best Regards<br>
-<strong>Mark</strong><br>
-<em>Weddings By Mark</em>
+<strong>{smtp.get('sender_name') or 'StudioApp'}</strong>
 </p>
 
 </td></tr>
@@ -3465,7 +3678,7 @@ Best Regards<br>
 <!-- Footer -->
 <tr><td style="background-color:#1C1917;padding:20px 40px;text-align:center;">
 <p style="color:#A8A29E;font-size:12px;margin:0;letter-spacing:1px;">
-WEDDINGS BY MARK &bull; CAPTURING YOUR STORY
+{(smtp.get('sender_name') or 'StudioApp').upper()} &bull; CAPTURING YOUR STORY
 </p>
 </td></tr>
 
@@ -3474,12 +3687,10 @@ WEDDINGS BY MARK &bull; CAPTURING YOUR STORY
 </table>
 </body>
 </html>"""
-
-    # Send the email
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = "Your Wedding Gallery is Ready"
-        msg["From"] = formataddr((smtp.get('sender_name', 'Weddings By Mark'), smtp['smtp_email']))
+        msg["From"] = formataddr((smtp.get('sender_name', 'StudioApp'), smtp['smtp_email']))
         msg["To"] = client_email
         msg.attach(MIMEText(html_body, "html"))
         
@@ -3560,7 +3771,7 @@ def send_smtp_email(smtp: dict, to_email: str, subject: str, html_body: str):
     """Send an email using stored SMTP settings. Runs synchronously (use in thread/executor)."""
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"] = formataddr((smtp.get("sender_name", "Weddings By Mark"), smtp["smtp_email"]))
+    msg["From"] = formataddr((smtp.get("sender_name", "StudioApp"), smtp["smtp_email"]))
     msg["To"] = to_email
     msg.attach(MIMEText(html_body, "html"))
 
@@ -3580,8 +3791,8 @@ def get_awards_url(smtp: dict) -> str:
         return f"{site_url}/api/public/email-assets/awards-badges.png"
     return ""
 
-def build_branded_email(content_html: str, awards_url: str = "") -> str:
-    """Wrap content in the branded Weddings By Mark email template."""
+def build_branded_email(content_html: str, awards_url: str = "", brand: str = "StudioApp") -> str:
+    """Wrap content in the tenant-branded email template."""
     awards_section = ""
     if awards_url:
         awards_section = f"""
@@ -3598,7 +3809,7 @@ def build_branded_email(content_html: str, awards_url: str = "") -> str:
 <table width="600" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border:1px solid #E8E4DC;max-width:600px;">
 <tr><td style="background-color:#1C1917;padding:30px 40px;text-align:center;">
 <h1 style="color:#D4AF37;font-family:Georgia,'Times New Roman',serif;font-size:22px;margin:0;font-weight:normal;letter-spacing:2px;">
-Weddings By Mark
+{brand}
 </h1>
 </td></tr>
 <tr><td style="padding:40px;">
@@ -3606,7 +3817,7 @@ Weddings By Mark
 </td></tr>{awards_section}
 <tr><td style="background-color:#1C1917;padding:20px 40px;text-align:center;">
 <p style="color:#A8A29E;font-size:12px;margin:0;letter-spacing:1px;">
-WEDDINGS BY MARK &bull; CAPTURING YOUR STORY
+{brand.upper()} &bull; CAPTURING YOUR STORY
 </p>
 </td></tr>
 </table>
@@ -3877,8 +4088,8 @@ Thank you once again for choosing me to capture your wedding day. It really was 
 </p>
 <p style="font-size:15px;color:#1C1917;margin:0;line-height:1.8;">
 Speak soon,<br><br>
-<strong>Mark</strong><br>
-<em>Weddings by Mark</em>
+<strong>Your Photographer</strong><br>
+<em>StudioApp</em>
 </p>"""
 
             html_body = build_branded_email(reminder_html, get_awards_url(smtp))
@@ -3940,7 +4151,11 @@ async def expiry_reminder_loop():
 
 @app.on_event("startup")
 async def startup_auto_archive():
-    """Check for old logs on startup and archive if needed. Also start expiry reminder loop."""
+    """Seed super admin, archive old logs, and start the daily expiry loop."""
+    try:
+        await ensure_super_admin()
+    except Exception as e:
+        logger.warning(f"Super admin seed failed: {e}")
     try:
         await _run_for_all_tenants(run_auto_archive)
     except Exception as e:

@@ -1,0 +1,33 @@
+{
+  "summary": "Phase 2 (Super Admin platform) + Phase 3 (per-tenant branding) fully verified. Backend: 20/20 pytest pass — super login/list/create/plan/status/delete, tenant provisioning auto-creates 'Demo - Emma & James 01.01.26', branding GET/PUT/logo upload, public branding-asset serving, share meta returns branding object, tenant isolation (mark vs rose galleries + branding). Frontend: /super login + tenant list + create (dialog testids present) + toggle status + change plan via Radix select all work. /admin dashboard: dash-logo renders IMG when tenant has logo (alt='Weddings By Mark', src is /branding-asset/…) and SPAN with business name otherwise — no hardcoded /logo.png. Branding page persists tagline/email/accent_color (verified via reload + direct API check). Client share /s/gina-mark shows tenant brand (Weddings By Mark) and footer 'Site Designed & Hosted by / StudioApp'; /s/<rose-token> shows 'Rose Photography' and NO 'Weddings By Mark' leak — isolation confirmed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "/admin/branding logo preview", "issues": ["Logo preview container uses a dark #1C1917 background which hides dark logos; consider a subtle checkerboard or letting user toggle preview background."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration_14_super_branding.py",
+    "/app/test_reports/pytest/iter14.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "AdminBranding.save() PUTs {business_name, accent_color, contact_email, tagline} without logo_url. This is fine because BrandingUpdate Pydantic model excludes logo_url (logo is only set via /admin/branding/logo). Just be aware if UI later needs to clear a logo — there is currently no 'remove logo' endpoint.",
+    "super_delete_tenant drops the tenant DB and deletes admins/share_index/tenant/upload dir — good — but does NOT invalidate outstanding JWTs for that tenant's admin. Deleted tenant admins with a still-valid JWT would hit get_admin -> lookup by tenant_id and 401 (because admin row is gone). Verified indirectly; acceptable.",
+    "super_list_tenants iterates use_tenant(t['id']) inside a request handler. Because use_tenant is per-request via context vars, sequential iteration is fine, but if this endpoint were ever awaited concurrently with another admin request the context leak could confuse. Consider using a scoped helper that just returns the count without mutating current_tenant_id.",
+    "get_tenant_branding uses control_db.tenants.find_one with projection {_id:0}. Good — no ObjectId leaks. Confirmed.",
+    "ShareView.js line 405: hero brand text color uses white when heroImageUrl or darkMode is truthy — fine — but if branding.business_name is empty AND no logo, header shows an empty span. Add fallback to 'StudioApp' like AdminDashboard does.",
+    "AdminBranding.js does not validate accent_color format client-side (any string is accepted). Backend also accepts anything. Consider a hex-pattern check to prevent CSS injection surface even though value is set via inline style.",
+    "admin_upload_logo reads full file into memory (5MB cap enforced) — acceptable for logos. Old logo files are NOT cleaned up when a new one is uploaded; branding_logo assets accumulate under UPLOAD_DIR/<tid>/.branding/. Consider deleting the previous file when overwritten."
+  ],
+  "updated_files": ["/app/backend/tests/test_iteration_14_super_branding.py"],
+  "success_rate": {"backend": "100% (20/20)", "frontend": "100% (all requested flows verified)"},
+  "test_credentials": "Super admin: superadmin / Stu!d10App_2026xQ at /super. Tenant admins: mark / Test!2026 and rose / Rose!2026 at /admin. Public shares: /s/gina-mark (Mark) and /s/<rose-token> (Rose, generated during test).",
+  "seed_data_creation": "Created & deleted one TEST tenant via /api/super/tenants during backend tests (business_name='TEST Studio <uuid>', username 'TEST_user_<uuid>'). Frontend also created a TEST tenant via UI which was left in place — main agent may delete 'TEST Photog xxxxxx' via super admin if desired. Mark's branding tagline/contact_email were left set to 'TEST_<hex>' and 'mark-test@studio.local' after the last successful save-persist test (harmless; can be blanked from /admin/branding).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Super admin creation via UI DOES call ct-submit successfully (verified). Radix Select for tenant plan renders items in a portal — click via 'div[role=\"option\"]:has-text(\"…\")' with force=True. Note: POST /api/admin/galleries/{gid}/shares requires body {\"gallery_id\": gid} (Pydantic ShareCreate has gallery_id as required). Frontend admin/api create-share UI passes it correctly; if testing via fetch/curl, include gallery_id. Rose's demo gallery was 'Demo - Emma & James 01.01.26' (auto-provisioned). The share meta endpoint /api/share/{token} returns {..., 'branding': {business_name, logo_url, accent_color, contact_email, tagline}} — ShareView reads this and updates state.",
+  "rca of the issue": "No issues found. All Phase 2/3 features (super admin CRUD, tenant provisioning with demo gallery, per-tenant branding, share-page brand + StudioApp footer, mark/rose isolation) behave as specified."
+}
