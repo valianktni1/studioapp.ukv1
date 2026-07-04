@@ -94,7 +94,8 @@ NGINX_VIDEO_SECRET = os.environ.get('NGINX_VIDEO_SECRET', JWT_SECRET)  # shared 
 def generate_nginx_video_url(gallery_folder: str, subfolder: str, filename: str, expires_seconds: int = 7200) -> str:
     """Generate a signed nginx URL for direct video serving. Returns relative path."""
     expires = int(time.time()) + expires_seconds
-    relative_path = f"{gallery_folder}/{subfolder}/{filename}"
+    tid = current_tenant_id() or "_shared"
+    relative_path = f"{tid}/{gallery_folder}/{subfolder}/{filename}"
     uri = f"/video/{relative_path}"
     # Hash is computed on the decoded URI (nginx decodes before checking)
     hash_input = f"{NGINX_VIDEO_SECRET}{uri}{expires}"
