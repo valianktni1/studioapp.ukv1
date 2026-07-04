@@ -38,7 +38,45 @@ load_dotenv(ROOT_DIR / '.env')
 
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
-db = client[os.environ['DB_NAME']]
+
+# ─── Multi-tenancy substrate (database-per-tenant via a request-scoped proxy) ───
+CONTROL_DB_NAME = os.environ['DB_NAME']
+control_db = client[CONTROL_DB_NAME]  # platform-level: admins, tenants, share_index
+
+from contextvars import ContextVar
+_ctx_tenant_id: ContextVar = ContextVar("sa_tenant_id", default=None)
+
+def _tenant_db_name(tenant_id: str) -> str:
+    return f"{CONTROL_DB_NAME}__t_{tenant_id.replace('-', '')}"
+
+def use_tenant(tenant_id: str):
+    """Bind the current request context to a tenant's isolated database."""
+    _ctx_tenant_id.set(tenant_id)
+
+def current_tenant_id():
+    return _ctx_tenant_id.get()
+
+class _TenantDBProxy:
+    """`db.<collection>` transparently resolves to the current tenant's database."""
+    def __getattr__(self, name):
+        tid = _ctx_tenant_id.get()
+        if tid is None:
+            raise HTTPException(status_code=400, detail="No tenant context for this request")
+        return client[_tenant_db_name(tid)][name]
+
+db = _TenantDBProxy()
+
+async def tenant_context_dep(request: Request):
+    """Router-level dependency: binds the tenant for public /api/share/* routes.
+    Admin routes bind via get_admin; authenticated share routes via get_share_session."""
+    path = request.url.path
+    marker = "/api/share/"
+    if marker in path:
+        token = path.split(marker, 1)[1].split("/", 1)[0]
+        if token:
+            idx = await control_db.share_index.find_one({"token": token})
+            if idx:
+                use_tenant(idx["tenant_id"])
 
 UPLOAD_DIR = Path(os.environ.get('UPLOAD_DIR', '/app/uploads'))
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -79,7 +117,7 @@ MAX_UPLOAD_SIZE = 40 * 1024 * 1024 * 1024  # 40GB for admin
 MAX_GUEST_UPLOAD_SIZE = 500 * 1024 * 1024  # 500MB per file for guests
 
 app = FastAPI()
-api_router = APIRouter(prefix="/api")
+api_router = APIRouter(prefix="/api", dependencies=[Depends(tenant_context_dep)])
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -202,6 +240,8 @@ async def get_admin(authorization: str = Header(None)):
     payload = verify_jwt(token)
     if payload.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Not admin")
+    if payload.get("tenant_id"):
+        use_tenant(payload["tenant_id"])
     return payload
 
 async def get_share_session(authorization: str = Header(None)):
@@ -211,6 +251,8 @@ async def get_share_session(authorization: str = Header(None)):
     payload = verify_jwt(token)
     if payload.get("role") != "share":
         raise HTTPException(status_code=403, detail="Invalid session")
+    if payload.get("tenant_id"):
+        use_tenant(payload["tenant_id"])
     return payload
 
 # ─── File Helpers ───
@@ -317,7 +359,8 @@ def make_video_preview(input_path: Path, output_path: Path, size=(1600, 900)):
         return False
 
 def get_gallery_path(folder_name: str) -> Path:
-    return UPLOAD_DIR / folder_name
+    tid = current_tenant_id() or "_shared"
+    return UPLOAD_DIR / tid / folder_name
 
 def get_thumb_path(gallery_id: str, subfolder: str, filename: str) -> Path:
     return CACHE_DIR / gallery_id / slugify(subfolder) / f"{Path(filename).stem}.thumb.jpg"
@@ -505,7 +548,7 @@ def ensure_video_faststart(file_path: Path, gallery_id: str = None):
         if temp_path.exists():
             temp_path.unlink()
 
-def generate_thumbnails_background(file_path: Path, gallery_id: str, subfolder: str, filename: str, file_type: str, file_id: str):
+def generate_thumbnails_background(file_path: Path, gallery_id: str, subfolder: str, filename: str, file_type: str, file_id: str, tenant_id: str = None):
     """Generate thumbnails in background thread - doesn't block uploads."""
     try:
         has_thumb = False
@@ -528,7 +571,7 @@ def generate_thumbnails_background(file_path: Path, gallery_id: str, subfolder: 
         # Update the file record with thumbnail status using sync pymongo
         from pymongo import MongoClient
         sync_client = MongoClient(os.environ['MONGO_URL'])
-        sync_db = sync_client[os.environ['DB_NAME']]
+        sync_db = sync_client[_tenant_db_name(tenant_id)] if tenant_id else sync_client[CONTROL_DB_NAME]
         sync_db.files.update_one(
             {"id": file_id},
             {"$set": {"has_thumb": has_thumb, "has_preview": has_preview}}
@@ -545,24 +588,34 @@ def generate_thumbnails_background(file_path: Path, gallery_id: str, subfolder: 
 # ─── Admin Auth ───
 @api_router.get("/admin/check-setup")
 async def check_admin_setup():
-    admin = await db.admins.find_one({}, {"_id": 0})
+    admin = await control_db.admins.find_one({}, {"_id": 0})
     return {"setup_complete": admin is not None}
 
 @api_router.post("/admin/setup")
 async def setup_admin(data: AdminSetup):
-    existing = await db.admins.find_one({})
+    existing = await control_db.admins.find_one({})
     if existing:
         raise HTTPException(status_code=400, detail="Admin already setup")
+    tenant_id = str(uuid.uuid4())
+    subdomain = slugify(data.display_name) or f"studio-{tenant_id[:6]}"
+    await control_db.tenants.insert_one({
+        "id": tenant_id,
+        "subdomain": subdomain,
+        "business_name": data.display_name,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
     hashed = bcrypt.hashpw(data.password.encode(), bcrypt.gensalt()).decode()
     admin_doc = {
         "id": str(uuid.uuid4()),
+        "tenant_id": tenant_id,
         "username": data.username,
         "password": hashed,
         "display_name": data.display_name,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
-    await db.admins.insert_one(admin_doc)
-    # Create default template
+    await control_db.admins.insert_one(admin_doc)
+    use_tenant(tenant_id)
+    # Create default template inside the new tenant's database
     default_template = {
         "id": str(uuid.uuid4()),
         "name": "Default Wedding",
@@ -571,7 +624,7 @@ async def setup_admin(data: AdminSetup):
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.templates.insert_one(default_template)
-    token = create_jwt({"sub": admin_doc["id"], "role": "admin", "username": data.username})
+    token = create_jwt({"sub": admin_doc["id"], "role": "admin", "username": data.username, "tenant_id": tenant_id})
     return {"token": token, "username": data.username, "display_name": data.display_name}
 
 @api_router.post("/admin/login")
@@ -583,7 +636,7 @@ async def admin_login(data: AdminLogin, request: Request):
     if check_rate_limit(client_ip):
         raise HTTPException(status_code=429, detail="Too many login attempts. Please try again in 30 minutes.")
     
-    admin = await db.admins.find_one({"username": data.username}, {"_id": 0})
+    admin = await control_db.admins.find_one({"username": data.username}, {"_id": 0})
     if not admin:
         record_login_attempt(client_ip)
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -605,7 +658,7 @@ async def admin_login(data: AdminLogin, request: Request):
             if data.totp_code in recovery_codes:
                 # Valid recovery code - remove it after use
                 recovery_codes.remove(data.totp_code)
-                await db.admins.update_one({"id": admin["id"]}, {"$set": {"recovery_codes": recovery_codes}})
+                await control_db.admins.update_one({"id": admin["id"]}, {"$set": {"recovery_codes": recovery_codes}})
             else:
                 record_login_attempt(client_ip)
                 raise HTTPException(status_code=401, detail="Invalid 2FA code")
@@ -613,18 +666,18 @@ async def admin_login(data: AdminLogin, request: Request):
     # Clear rate limit on successful login
     clear_login_attempts(client_ip)
     
-    token = create_jwt({"sub": admin["id"], "role": "admin", "username": data.username}, expires_hours=ADMIN_SESSION_HOURS)
+    token = create_jwt({"sub": admin["id"], "role": "admin", "username": data.username, "tenant_id": admin.get("tenant_id")}, expires_hours=ADMIN_SESSION_HOURS)
     return {"token": token, "username": admin["username"], "display_name": admin.get("display_name", "")}
 
 @api_router.put("/admin/change-password")
 async def change_password(data: PasswordChange, admin=Depends(get_admin)):
-    admin_doc = await db.admins.find_one({"id": admin["sub"]}, {"_id": 0})
+    admin_doc = await control_db.admins.find_one({"id": admin["sub"]}, {"_id": 0})
     if not admin_doc:
         raise HTTPException(status_code=404, detail="Admin not found")
     if not bcrypt.checkpw(data.current_password.encode(), admin_doc["password"].encode()):
         raise HTTPException(status_code=401, detail="Current password is incorrect")
     new_hashed = bcrypt.hashpw(data.new_password.encode(), bcrypt.gensalt()).decode()
-    await db.admins.update_one({"id": admin["sub"]}, {"$set": {"password": new_hashed}})
+    await control_db.admins.update_one({"id": admin["sub"]}, {"$set": {"password": new_hashed}})
     return {"message": "Password changed successfully"}
 
 # ─── Two-Factor Authentication ───
@@ -634,7 +687,7 @@ class TotpVerify(BaseModel):
 @api_router.get("/admin/2fa/status")
 async def get_2fa_status(admin=Depends(get_admin)):
     """Check if 2FA is enabled for the admin."""
-    admin_doc = await db.admins.find_one({"id": admin["sub"]}, {"_id": 0})
+    admin_doc = await control_db.admins.find_one({"id": admin["sub"]}, {"_id": 0})
     if not admin_doc:
         raise HTTPException(status_code=404, detail="Admin not found")
     return {"enabled": admin_doc.get("totp_enabled", False)}
@@ -642,7 +695,7 @@ async def get_2fa_status(admin=Depends(get_admin)):
 @api_router.post("/admin/2fa/setup")
 async def setup_2fa(admin=Depends(get_admin)):
     """Generate a new TOTP secret and return the provisioning URI for QR code scanning."""
-    admin_doc = await db.admins.find_one({"id": admin["sub"]}, {"_id": 0})
+    admin_doc = await control_db.admins.find_one({"id": admin["sub"]}, {"_id": 0})
     if not admin_doc:
         raise HTTPException(status_code=404, detail="Admin not found")
     
@@ -650,7 +703,7 @@ async def setup_2fa(admin=Depends(get_admin)):
     secret = pyotp.random_base32()
     
     # Store secret temporarily (not enabled yet until verified)
-    await db.admins.update_one({"id": admin["sub"]}, {"$set": {"totp_secret_pending": secret}})
+    await control_db.admins.update_one({"id": admin["sub"]}, {"$set": {"totp_secret_pending": secret}})
     
     # Generate provisioning URI
     display_name = admin_doc.get("display_name", "Gallery Admin")
@@ -671,7 +724,7 @@ async def setup_2fa(admin=Depends(get_admin)):
 @api_router.post("/admin/2fa/enable")
 async def enable_2fa(data: TotpVerify, admin=Depends(get_admin)):
     """Verify a TOTP code and enable 2FA. Returns recovery codes."""
-    admin_doc = await db.admins.find_one({"id": admin["sub"]}, {"_id": 0})
+    admin_doc = await control_db.admins.find_one({"id": admin["sub"]}, {"_id": 0})
     if not admin_doc:
         raise HTTPException(status_code=404, detail="Admin not found")
     
@@ -688,7 +741,7 @@ async def enable_2fa(data: TotpVerify, admin=Depends(get_admin)):
     recovery_codes = [secrets.token_hex(4).upper() for _ in range(8)]
     
     # Enable 2FA
-    await db.admins.update_one({"id": admin["sub"]}, {
+    await control_db.admins.update_one({"id": admin["sub"]}, {
         "$set": {
             "totp_secret": pending_secret,
             "totp_enabled": True,
@@ -702,7 +755,7 @@ async def enable_2fa(data: TotpVerify, admin=Depends(get_admin)):
 @api_router.post("/admin/2fa/disable")
 async def disable_2fa(data: TotpVerify, admin=Depends(get_admin)):
     """Disable 2FA. Requires a valid TOTP code or recovery code."""
-    admin_doc = await db.admins.find_one({"id": admin["sub"]}, {"_id": 0})
+    admin_doc = await control_db.admins.find_one({"id": admin["sub"]}, {"_id": 0})
     if not admin_doc:
         raise HTTPException(status_code=404, detail="Admin not found")
     
@@ -717,7 +770,7 @@ async def disable_2fa(data: TotpVerify, admin=Depends(get_admin)):
         raise HTTPException(status_code=400, detail="Invalid code")
     
     # Disable 2FA
-    await db.admins.update_one({"id": admin["sub"]}, {
+    await control_db.admins.update_one({"id": admin["sub"]}, {
         "$unset": {"totp_secret": "", "totp_secret_pending": "", "totp_enabled": "", "recovery_codes": ""}
     })
     
@@ -937,6 +990,7 @@ async def delete_gallery(gallery_id: str, delete_backup: bool = Query(False), ad
             shutil.rmtree(backup_path)
             logger.info(f"Deleted backup for gallery '{gallery['folder_name']}'")
     await db.files.delete_many({"gallery_id": gallery_id})
+    await control_db.share_index.delete_many({"gallery_id": gallery_id})
     await db.shares.delete_many({"gallery_id": gallery_id})
     await db.favourites.delete_many({"gallery_id": gallery_id})
     await db.galleries.delete_one({"id": gallery_id})
@@ -998,7 +1052,7 @@ async def upload_files(
         if file_type in ("photo", "video"):
             thumbnail_executor.submit(
                 generate_thumbnails_background,
-                file_path, gallery_id, subfolder, final_name, file_type, file_id
+                file_path, gallery_id, subfolder, final_name, file_type, file_id, current_tenant_id()
             )
 
     # Update file counts
@@ -1218,7 +1272,7 @@ async def create_share(gallery_id: str, data: ShareCreate, admin=Depends(get_adm
         if not re.match(r'^[a-zA-Z0-9-]+$', data.custom_slug):
             raise HTTPException(status_code=400, detail="Custom URL can only contain letters, numbers, and hyphens")
         # Check if slug already exists
-        existing = await db.shares.find_one({"token": data.custom_slug}, {"_id": 0})
+        existing = await control_db.share_index.find_one({"token": data.custom_slug})
         if existing:
             raise HTTPException(status_code=400, detail="This custom URL is already in use")
         share_token = data.custom_slug
@@ -1247,6 +1301,9 @@ async def create_share(gallery_id: str, data: ShareCreate, admin=Depends(get_adm
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.shares.insert_one(share_doc)
+    await control_db.share_index.insert_one({
+        "token": share_token, "tenant_id": current_tenant_id(), "gallery_id": gallery_id,
+    })
     result = {k: v for k, v in share_doc.items() if k not in ("_id", "password_hash", "password_raw")}
     return result
 
@@ -1257,9 +1314,12 @@ async def list_shares(gallery_id: str, admin=Depends(get_admin)):
 
 @api_router.delete("/admin/shares/{share_id}")
 async def delete_share(share_id: str, admin=Depends(get_admin)):
+    share = await db.shares.find_one({"id": share_id}, {"_id": 0})
     result = await db.shares.delete_one({"id": share_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Share not found")
+    if share:
+        await control_db.share_index.delete_many({"token": share["token"]})
     return {"success": True}
 
 @api_router.put("/admin/shares/{share_id}/toggle")
@@ -1693,6 +1753,7 @@ async def access_share(token: str, body: ShareAccessBody = None):
         "allow_uploads": access_level in ("upload", "full"),
         "allow_downloads": access_level in ("download", "upload", "full"),
         "allow_delete": access_level == "full",
+        "tenant_id": current_tenant_id(),
         "token": token
     }, expires_hours=72)
     gallery = await db.galleries.find_one({"id": share["gallery_id"]}, {"_id": 0})
@@ -1723,6 +1784,7 @@ async def open_access_share(token: str, viewer_id: str = Query(None)):
         "allow_uploads": access_level in ("upload", "full"),
         "allow_downloads": access_level in ("download", "upload", "full"),
         "allow_delete": access_level == "full",
+        "tenant_id": current_tenant_id(),
         "token": token
     }, expires_hours=72)
     gallery = await db.galleries.find_one({"id": share["gallery_id"]}, {"_id": 0})
@@ -2388,7 +2450,7 @@ async def guest_upload(
             if file_type == "photo":
                 thumbnail_executor.submit(
                     generate_thumbnails_background,
-                    file_path, gallery_id, subfolder, final_name, file_type, file_doc["id"]
+                    file_path, gallery_id, subfolder, final_name, file_type, file_doc["id"], current_tenant_id()
                 )
             
             uploaded.append({k: v for k, v in file_doc.items() if k != "_id"})
@@ -2434,7 +2496,8 @@ async def guest_upload(
                     compress_guest_video_background,
                     file_path,
                     file_doc["id"],
-                    gallery_id
+                    gallery_id,
+                    current_tenant_id()
                 )
 
     count = await db.files.count_documents({"gallery_id": gallery_id, "subfolder": subfolder})
@@ -3101,7 +3164,7 @@ def compress_video_ffmpeg(input_path: Path, output_path: Path) -> bool:
         logger.error(f"Video compression failed: {e}")
         return False
 
-def compress_guest_video_background(file_path: Path, file_id: str, gallery_id: str):
+def compress_guest_video_background(file_path: Path, file_id: str, gallery_id: str, tenant_id: str = None):
     """
     Background task to compress a guest video if it exceeds threshold.
     Keeps original until compression is verified, then replaces.
@@ -3141,7 +3204,7 @@ def compress_guest_video_background(file_path: Path, file_id: str, gallery_id: s
                     
                     # Create new client for this thread
                     thread_client = AsyncIOMotorClient(os.environ.get("MONGO_URL", "mongodb://localhost:27017"))
-                    thread_db = thread_client[os.environ.get("DB_NAME", "weddings_gallery")]
+                    thread_db = thread_client[_tenant_db_name(tenant_id)] if tenant_id else thread_client[CONTROL_DB_NAME]
                     
                     loop.run_until_complete(
                         thread_db.files.update_one(
@@ -3855,11 +3918,21 @@ Speak soon,<br><br>
         logger.info(f"Sent {sent_count} expiry reminder email(s)")
     return sent_count
 
+async def _run_for_all_tenants(coro_fn):
+    """Run a tenant-scoped background job across every tenant database."""
+    tenants = await control_db.tenants.find({}, {"_id": 0, "id": 1}).to_list(100000)
+    for t in tenants:
+        use_tenant(t["id"])
+        try:
+            await coro_fn()
+        except Exception as e:
+            logger.warning(f"Background job failed for tenant {t['id']}: {e}")
+
 async def expiry_reminder_loop():
-    """Background loop that checks for expiring shares once daily."""
+    """Background loop that checks for expiring shares once daily (all tenants)."""
     while True:
         try:
-            await check_expiry_reminders()
+            await _run_for_all_tenants(check_expiry_reminders)
         except Exception as e:
             logger.warning(f"Expiry reminder check failed: {e}")
         # Check once every 24 hours
@@ -3869,12 +3942,12 @@ async def expiry_reminder_loop():
 async def startup_auto_archive():
     """Check for old logs on startup and archive if needed. Also start expiry reminder loop."""
     try:
-        await run_auto_archive()
+        await _run_for_all_tenants(run_auto_archive)
     except Exception as e:
         logger.warning(f"Auto-archive check failed: {e}")
     # Run expiry check once at startup
     try:
-        await check_expiry_reminders()
+        await _run_for_all_tenants(check_expiry_reminders)
     except Exception as e:
         logger.warning(f"Startup expiry reminder check failed: {e}")
     # Start daily background loop

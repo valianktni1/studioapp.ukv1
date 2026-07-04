@@ -26,8 +26,7 @@ user "Mark"), tenants (photographers), and tenant customisation. Do NOT reinvent
 - Video pipeline (WORKS on their AMD 780M): make_video_thumbnail (output-seek+fallback), create_web_version (VAAPI->CPU), ensure_video_faststart, thumbnail_executor(8)/transcode_executor(2). Do NOT change.
 
 ## SaaS conversion plan (remaining phases)
-- Phase 1: Data-layer tenancy. Add tenant_id to all collections (galleries, files, shares, favourites,
-  templates, orders, activity, smtp settings, admins). Scope every query. Storage paths -> UPLOAD_DIR/{tenant_id}/{folder_name}. CACHE_DIR -> per-tenant.
+- Phase 1: DONE ✅ (2026-06). Multi-tenancy at the data layer via **database-per-tenant + request-scoped `db` proxy** (contextvar). Control DB `studioapp` holds `admins`, `tenants`, `share_index`. Each tenant's data lives in `studioapp__t_<id>`. JWT carries `tenant_id`; `get_admin`/`get_share_session` bind it; public `/api/share/*` routes bind via a router-level dep that looks up the token in `share_index`. Storage paths prefixed by tenant (`UPLOAD_DIR/<tenant_id>/<folder>`). Background jobs (thumbnails, guest-video compress, expiry/auto-archive) tenant-bound. VERIFIED: setup→login→gallery→upload→thumbnail→share→public access all work; hard DB isolation confirmed; frontend admin dashboard works.
 - Phase 2: Auth. Super admin (Mark) role + tenant admins. Convert single-admin setup into: super admin seeded from env (SUPER_ADMIN_USERNAME/PASSWORD), tenants each with their own admin login. get_admin resolves tenant_id from JWT.
 - Phase 3: Tenant branding. Per-tenant display_name/logo/accent/secondary/email/SMTP. Replace all hardcoded WBM. Logo upload to LOCAL disk (no cloud object storage). Footer: "Site Designed & Hosted by StudioApp".
 - Phase 4: Super admin dashboard + plans + billing. Plans: Starter 10 galleries £15/mo, Professional 30 £35/mo, Studio 60 £65/mo. Stripe (emergentintegrations, direct to Stripe). Trials + suspend.
