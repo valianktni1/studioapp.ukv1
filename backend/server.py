@@ -785,29 +785,41 @@ def create_web_version(file_path: Path, gallery_id: str = None, file_id: str = N
             video_optimise_progress[gallery_id]["current_file"] = f"Transcoding ({method}): {file_path.name}"
         
         try:
-            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            for line in process.stdout:
-                line = line.strip()
-                if line.startswith('out_time_us='):
-                    try:
-                        us = int(line.split('=')[1])
-                        if duration > 0:
-                            pct = min(99, int((us / 1000000) / duration * 100))
-                            file_transcode_progress[progress_key]["percent"] = pct
-                    except (ValueError, ZeroDivisionError):
-                        pass
-            process.wait(timeout=7200)
+            err_path = file_path.parent / f"{file_path.stem}.{method.lower()}.ffmpeg.log"
+            with open(err_path, "w") as errf:
+                process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=errf, text=True)
+                for line in process.stdout:
+                    line = line.strip()
+                    if line.startswith('out_time_us='):
+                        try:
+                            us = int(line.split('=')[1])
+                            if duration > 0:
+                                pct = min(99, int((us / 1000000) / duration * 100))
+                                file_transcode_progress[progress_key]["percent"] = pct
+                        except (ValueError, ZeroDivisionError):
+                            pass
+                process.wait(timeout=7200)
             
             if process.returncode == 0 and temp_path.exists() and temp_path.stat().st_size > 0:
                 temp_path.rename(web_path)
                 file_transcode_progress[progress_key]["percent"] = 100
                 file_transcode_progress[progress_key]["status"] = "complete"
                 logger.info(f"Web version created ({method}): {web_path.name} ({web_path.stat().st_size / (1024*1024):.0f}MB)")
+                try: err_path.unlink()
+                except OSError: pass
                 return True
             else:
                 if temp_path.exists():
                     temp_path.unlink()
-                logger.warning(f"{method} encoding failed for {file_path.name}")
+                # Surface the real ffmpeg error (e.g. VAAPI init failure) so GPU->CPU fallback is diagnosable
+                err_tail = ""
+                try:
+                    err_tail = err_path.read_text()[-2000:]
+                except OSError:
+                    pass
+                logger.warning(f"{method} encoding failed for {file_path.name} (rc={process.returncode}). ffmpeg stderr tail:\n{err_tail}")
+                try: err_path.unlink()
+                except OSError: pass
                 return False
         except Exception as e:
             logger.warning(f"{method} encoding error for {file_path.name}: {e}")
