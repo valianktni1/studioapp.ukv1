@@ -115,12 +115,6 @@ async def startup():
     await seed_super_admin()
     await seed_demo_tenant()
     await migrate_tenants()
-    try:
-        from storage_client import init_storage
-        init_storage()
-        logger.info("Object storage initialized")
-    except Exception as e:
-        logger.error("Object storage init failed: %s", e)
 
     import asyncio
     from routes.email import run_expiry_reminders
