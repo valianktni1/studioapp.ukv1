@@ -301,6 +301,7 @@ async def get_tenant_branding(tenant_id):
         "accent_color": t.get("accent_color") or "#D4AF37",
         "contact_email": t.get("contact_email") or "",
         "tagline": t.get("tagline") or "",
+        "subdomain": t.get("subdomain") or "",
     }
 
 async def _provision_tenant(business_name, username, password, plan="starter", with_demo=True):

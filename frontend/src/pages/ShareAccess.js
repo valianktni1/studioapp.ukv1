@@ -8,7 +8,7 @@ import { Camera, Lock, Heart, Upload, Clock } from "lucide-react";
 import { getShareInfo, accessShare, openAccessShare, getErrorMessage } from "@/lib/api";
 
 export default function ShareAccess() {
-  const { token } = useParams();
+  const { token, tenant } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const nextDest = searchParams.get('next');

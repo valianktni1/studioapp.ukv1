@@ -34,6 +34,10 @@ function App() {
           <Route path="/s/:token/view" element={<ShareView />} />
           <Route path="/s/:token/slideshow" element={<SlideshowDirect />} />
           <Route path="/s/:token/prints" element={<PrintShop />} />
+          <Route path="/s/:tenant/:token" element={<ShareAccess />} />
+          <Route path="/s/:tenant/:token/view" element={<ShareView />} />
+          <Route path="/s/:tenant/:token/slideshow" element={<SlideshowDirect />} />
+          <Route path="/s/:tenant/:token/prints" element={<PrintShop />} />
           <Route path="/" element={<AdminLogin />} />
         </Routes>
       </BrowserRouter>
