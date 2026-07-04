@@ -3,14 +3,12 @@ FROM python:3.11-slim
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libjpeg-dev zlib1g-dev ffmpeg curl fonts-liberation libmagic1 \
+    libjpeg-dev zlib1g-dev ffmpeg curl fonts-liberation \
     vainfo libva2 libva-drm2 mesa-va-drivers && \
     rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir \
-    --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/ \
-    -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 

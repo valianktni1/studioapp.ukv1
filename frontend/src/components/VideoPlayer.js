@@ -1,40 +1,116 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import videojs from "video.js";
 import "video.js/dist/video-js.css";
-import { pub, API } from "@/lib/api";
 
-// video.js player that streams the web-optimised (NGINX secure_link) version, or the original as fallback.
-export default function VideoPlayer({ token, file }) {
-  const videoRef = useRef(null);
+const EXT_TYPES = {
+  ".mp4": "video/mp4",
+  ".mov": "video/mp4",
+  ".webm": "video/webm",
+  ".mkv": "video/x-matroska",
+  ".avi": "video/x-msvideo",
+  ".mts": "video/mp2t",
+};
+
+function getMimeType(filename) {
+  if (!filename) return "video/mp4";
+  const ext = filename.slice(filename.lastIndexOf(".")).toLowerCase();
+  return EXT_TYPES[ext] || "video/mp4";
+}
+
+export default function VideoPlayer({ src, resolveUrl, filename }) {
+  const containerRef = useRef(null);
   const playerRef = useRef(null);
-  const [src, setSrc] = useState(null);
+  const [error, setError] = useState(false);
+  const [resolvedSrc, setResolvedSrc] = useState(null);
+  const [loading, setLoading] = useState(false);
 
+  // Resolve the playback URL (zero-DB-lookup direct stream)
   useEffect(() => {
     let cancelled = false;
-    pub.get(`/share/${token}/video-url/${file.id}`)
-      .then(({ data }) => { if (!cancelled) setSrc(data.url); })
-      .catch(() => { if (!cancelled) setSrc(`${API}/media/original/${file.gallery_id || ""}`); });
+    if (resolveUrl) {
+      setLoading(true);
+      resolveUrl()
+        .then((url) => { if (!cancelled) setResolvedSrc(url); })
+        .catch(() => { if (!cancelled) setResolvedSrc(src); }) // fallback to old URL
+        .finally(() => { if (!cancelled) setLoading(false); });
+    } else {
+      setResolvedSrc(src);
+    }
     return () => { cancelled = true; };
-  }, [token, file.id]); // eslint-disable-line
+  }, [src, resolveUrl]);
 
+  // Initialize video.js once we have the URL
   useEffect(() => {
-    if (!src || playerRef.current) return;
-    const el = videoRef.current;
-    if (!el) return;
-    playerRef.current = videojs(el, {
-      controls: true, autoplay: true, preload: "auto", fluid: true,
-      playbackRates: [0.5, 1, 1.25, 1.5, 2],
-      sources: [{ src, type: "video/mp4" }],
-    });
-    return () => { if (playerRef.current) { playerRef.current.dispose(); playerRef.current = null; } };
-  }, [src]);
+    if (!containerRef.current || !resolvedSrc) return;
+    setError(false);
 
-  if (!src) return <div className="flex items-center justify-center h-[60vh] w-[80vw] text-white">Loading video…</div>;
-  return (
-    <div className="w-[85vw] max-w-4xl" data-testid="video-player" onClick={(e) => e.stopPropagation()}>
-      <div data-vjs-player>
-        <video ref={videoRef} className="video-js vjs-big-play-centered" playsInline />
+    const videoEl = document.createElement("video-js");
+    videoEl.classList.add("vjs-big-play-centered");
+    containerRef.current.appendChild(videoEl);
+
+    const mimeType = getMimeType(filename);
+
+    const player = videojs(videoEl, {
+      controls: true,
+      autoplay: true,
+      preload: "auto",
+      responsive: true,
+      fill: true,
+      playbackRates: [0.5, 1, 1.25, 1.5, 2],
+      html5: {
+        vhs: { overrideNative: false },
+        nativeVideoTracks: true,
+        nativeAudioTracks: true,
+      },
+      controlBar: {
+        volumePanel: { inline: true },
+        pictureInPictureToggle: true,
+      },
+      sources: [{ src: resolvedSrc, type: mimeType }],
+    });
+
+    player.on("error", () => setError(true));
+    playerRef.current = player;
+
+    return () => {
+      if (playerRef.current && !playerRef.current.isDisposed()) {
+        playerRef.current.dispose();
+        playerRef.current = null;
+      }
+    };
+  }, [resolvedSrc, filename]);
+
+  if (loading) {
+    return (
+      <div data-testid="video-player-loading" onClick={(e) => e.stopPropagation()}
+        style={{ width: "90vw", maxWidth: "1200px", height: "70vh", display: "flex", alignItems: "center", justifyContent: "center", backgroundColor: "black", borderRadius: "4px" }}>
+        <div style={{ color: "white", fontFamily: "Manrope, sans-serif", fontSize: "14px" }}>Loading video...</div>
       </div>
-    </div>
+    );
+  }
+
+  // Fallback to native HTML5 video if video.js fails
+  if (error && resolvedSrc) {
+    return (
+      <div data-testid="video-player-fallback" onClick={(e) => e.stopPropagation()}>
+        <video
+          src={resolvedSrc}
+          controls
+          autoPlay
+          playsInline
+          preload="auto"
+          style={{ maxWidth: "90vw", maxHeight: "85vh", backgroundColor: "black" }}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      data-testid="video-player-container"
+      ref={containerRef}
+      onClick={(e) => e.stopPropagation()}
+      style={{ width: "90vw", maxWidth: "1200px", height: "70vh", maxHeight: "85vh" }}
+    />
   );
 }
