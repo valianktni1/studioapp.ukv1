@@ -58,6 +58,7 @@ async def create_share(gid: str, body: ShareCreate, ctx=Depends(get_current_tena
         "label": body.label,
         "custom_slug": body.custom_slug,
         "guest_upload_mode": body.guest_upload_mode,
+        "allow_delete": body.allow_delete,
         "expiry_reminder_sent": False,
         "created_at": now_iso(),
     }

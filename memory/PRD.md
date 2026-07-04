@@ -108,3 +108,8 @@ Turn a single-tenant wedding photography gallery system into a **multi-tenant Sa
 - Backend: POST /api/share/{token}/delete (public_share.py) — gated on access_level == "full" (returns allow_delete in share meta + files payload). Deletes original + thumb + preview + db record + favourites, decrements tenant storage_used_bytes. TESTED: 403 on download-level share; full E2E delete on full-access share works.
 - Frontend (ShareView.js): album view Select toggle (shown only when access_level=full), per-tile checkboxes + gold selection ring, header Cancel + "Delete (N)", confirmation modal. TESTED via screenshot, no JS errors.
 - GPU compose simplified to `devices: /dev/dri:/dev/dri` (no group_add/GID needed) — ffmpeg auto-uses 780M VAAPI or falls back to CPU, matching reference behaviour. No user host commands required.
+
+## Dedicated "Allow clients to delete files" toggle (2026-06)
+- ShareCreate.allow_delete (models.py) stored on share (shares.py). Delete gating = allow_delete OR access_level=="full" (backward-compat). Payloads surface computed allow_delete.
+- Admin UI: checkbox "Allow clients to delete files" in create-share form (AdminGalleryDetail.js, data-testid sh-allow-delete).
+- TESTED: download-level share + toggle → delete works; download-level without toggle → 403.

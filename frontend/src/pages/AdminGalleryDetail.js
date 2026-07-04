@@ -16,7 +16,7 @@ export default function AdminGalleryDetail() {
   const [uploading, setUploading] = useState(false);
   const [shares, setShares] = useState([]);
   const [showShare, setShowShare] = useState(false);
-  const [shareForm, setShareForm] = useState({ subfolder: "", password: "", access_level: "download", label: "", expires_at: "", guest_upload_mode: false });
+  const [shareForm, setShareForm] = useState({ subfolder: "", password: "", access_level: "download", label: "", expires_at: "", guest_upload_mode: false, allow_delete: false });
   const [showNotify, setShowNotify] = useState(false);
   const [notify, setNotify] = useState({ to: "", share_url: "", password: "", message: "" });
   const [notifyBusy, setNotifyBusy] = useState(false);
@@ -80,7 +80,7 @@ export default function AdminGalleryDetail() {
       const body = { ...shareForm, subfolder: shareForm.subfolder || null, password: shareForm.password || null, expires_at: shareForm.expires_at || null };
       await tenantApi.post(`/admin/galleries/${id}/shares`, body);
       toast.success("Share link created"); setShowShare(false);
-      setShareForm({ subfolder: "", password: "", access_level: "download", label: "", expires_at: "", guest_upload_mode: false });
+      setShareForm({ subfolder: "", password: "", access_level: "download", label: "", expires_at: "", guest_upload_mode: false, allow_delete: false });
       loadShares();
     } catch (err) { toast.error(apiError(err)); }
   };
@@ -237,6 +237,7 @@ export default function AdminGalleryDetail() {
             </div>
             <div><label className="sa-label block mb-2">Expires (optional)</label><input type="date" className="sa-input" value={shareForm.expires_at} onChange={(e) => setShareForm({ ...shareForm, expires_at: e.target.value ? new Date(e.target.value).toISOString() : "" })} data-testid="sh-expiry" /></div>
             <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={shareForm.guest_upload_mode} onChange={(e) => setShareForm({ ...shareForm, guest_upload_mode: e.target.checked })} data-testid="sh-guest" /> Guest upload link</label>
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={shareForm.allow_delete} onChange={(e) => setShareForm({ ...shareForm, allow_delete: e.target.checked })} data-testid="sh-allow-delete" /> Allow clients to delete files</label>
             <div className="flex gap-3 pt-2">
               <button type="button" className="sa-btn-ghost flex-1" onClick={() => setShowShare(false)}>Cancel</button>
               <button className="sa-btn flex-1" data-testid="sh-submit">Create</button>

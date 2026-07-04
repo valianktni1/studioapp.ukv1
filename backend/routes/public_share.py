@@ -88,7 +88,7 @@ async def share_meta(token: str):
         "share_id": s["id"],
         "needs_password": bool(s.get("has_password")),
         "access_level": s.get("access_level"),
-        "allow_delete": s.get("access_level") == "full",
+        "allow_delete": s.get("allow_delete", False) or s.get("access_level") == "full",
         "guest_upload_mode": s.get("guest_upload_mode", False),
         "gallery_name": g.get("folder_name"),
         "gallery_id": g["id"],
@@ -108,7 +108,7 @@ async def _files_payload(s, g):
         "subfolders": subfolders,
         "covers": g.get("covers", {}),
         "access_level": s.get("access_level"),
-        "allow_delete": s.get("access_level") == "full",
+        "allow_delete": s.get("allow_delete", False) or s.get("access_level") == "full",
         "guest_upload_mode": s.get("guest_upload_mode", False),
         "tenant": await _tenant_brand(s["tenant_id"]),
         "favourites_count": fav_count,
@@ -309,7 +309,7 @@ async def guest_upload(token: str, files: list[UploadFile] = File(...)):
 async def guest_delete_files(token: str, payload: dict):
     """Delete files from a share. Only allowed when access_level == 'full' (photographer-managed share)."""
     s = await _resolve_share(token)
-    if s.get("access_level") != "full":
+    if not (s.get("allow_delete", False) or s.get("access_level") == "full"):
         raise HTTPException(status_code=403, detail="Deleting not allowed on this share")
     file_ids = payload.get("file_ids", [])
     deleted = 0

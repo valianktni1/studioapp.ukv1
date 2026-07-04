@@ -78,6 +78,7 @@ class ShareCreate(BaseModel):
     label: Optional[str] = None
     custom_slug: Optional[str] = None
     guest_upload_mode: bool = False
+    allow_delete: bool = False
 
 
 class ShareAccess(BaseModel):
