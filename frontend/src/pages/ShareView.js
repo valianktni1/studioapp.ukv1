@@ -36,8 +36,9 @@ export default function ShareView() {
 }
 
 function ShareViewFull() {
-  const { token } = useParams();
+  const { token, tenant } = useParams();
   const navigate = useNavigate();
+  const base = tenant ? `/s/${tenant}/${token}` : `/s/${token}`;
   const fileInputRef = useRef(null);
   const guestInputRef = useRef(null);
 
@@ -142,14 +143,14 @@ function ShareViewFull() {
       console.error("Failed to load share files:", err);
       localStorage.removeItem("share_token");
       localStorage.removeItem("share_url_token");
-      navigate(`/s/${token}`);
+      navigate(base);
     } finally {
       setLoading(false);
     }
   }, [token, navigate]);
 
   useEffect(() => {
-    if (!localStorage.getItem("share_token")) { navigate(`/s/${token}`); return; }
+    if (!localStorage.getItem("share_token")) { navigate(base); return; }
     loadFiles();
     // Track gallery view
     trackGalleryView(token);
@@ -367,7 +368,7 @@ function ShareViewFull() {
             onClick={() => { 
               localStorage.removeItem("share_token"); 
               localStorage.removeItem("share_url_token"); 
-              navigate(`/s/${token}`); 
+              navigate(base); 
             }}
             className="text-[#D4AF37] underline"
           >
@@ -412,7 +413,7 @@ function ShareViewFull() {
                 title={darkMode ? 'Light mode' : 'Dark mode'}>
                 {darkMode ? <Sun className="w-3.5 h-3.5" style={{ color: heroImageUrl ? 'white' : '#D4AF37' }} /> : <Moon className="w-3.5 h-3.5" style={{ color: heroImageUrl ? 'white' : '#78716C' }} />}
               </button>
-              <Button data-testid="order-prints-btn" onClick={() => navigate(`/s/${token}/prints`)}
+              <Button data-testid="order-prints-btn" onClick={() => navigate(`${base}/prints`)}
                 className={`rounded-sm gap-2 text-xs tracking-wider uppercase font-bold px-4 py-2 shadow-md ${heroImageUrl ? 'bg-white/20 backdrop-blur-md hover:bg-white/30 text-white border border-white/20' : 'bg-[#D4AF37] hover:bg-[#B8962E] text-white'}`}>
                 <Printer className="w-4 h-4" /> Order Prints
               </Button>

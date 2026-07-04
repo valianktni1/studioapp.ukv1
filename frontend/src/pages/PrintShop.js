@@ -16,9 +16,10 @@ import {
 } from "@/lib/api";
 
 export default function PrintShop() {
-  const { token } = useParams();
+  const { token, tenant } = useParams();
   const navigate = useNavigate();
   const cartRef = React.useRef(null);
+  const base = tenant ? `/s/${tenant}/${token}` : `/s/${token}`;
   
   const MINIMUM_ORDER = 15.00; // Minimum order value in GBP
   
@@ -57,7 +58,7 @@ export default function PrintShop() {
       setShippingCost(sizesRes.data.shipping_cost);
     } catch (err) {
       toast.error("Failed to load print shop");
-      navigate(`/s/${token}/view`);
+      navigate(`${base}/view`);
     } finally {
       setLoading(false);
     }
@@ -67,7 +68,7 @@ export default function PrintShop() {
     const jwt = localStorage.getItem("share_token");
     const urlToken = localStorage.getItem("share_url_token");
     if (!jwt || urlToken !== token) {
-      navigate(`/s/${token}`);
+      navigate(base);
       return;
     }
     loadData();
@@ -209,7 +210,7 @@ export default function PrintShop() {
             You'll be redirected to PayPal to complete your payment of £{orderComplete.total.toFixed(2)}
           </p>
 
-          <Button variant="ghost" onClick={() => navigate(`/s/${token}/view`)} className="text-[#57534E]">
+          <Button variant="ghost" onClick={() => navigate(`${base}/view`)} className="text-[#57534E]">
             Back to Gallery
           </Button>
         </div>
@@ -223,7 +224,7 @@ export default function PrintShop() {
       <header className="sticky top-0 z-40 border-b" style={{ backgroundColor: 'rgba(253,252,248,0.85)', backdropFilter: 'blur(16px)', borderColor: 'rgba(212,175,55,0.15)' }}>
         <div className="max-w-screen-xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <button onClick={() => navigate(`/s/${token}/view`)} className="text-[#57534E] hover:text-[#1C1917]">
+            <button onClick={() => navigate(`${base}/view`)} className="text-[#57534E] hover:text-[#1C1917]">
               <ArrowLeft className="w-5 h-5" />
             </button>
             <div>

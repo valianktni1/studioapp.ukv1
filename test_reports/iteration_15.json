@@ -1,0 +1,32 @@
+{
+  "summary": "Phase 5 (namespaced/branded share links) tested end-to-end for Mark (Weddings By Mark). All 4 UI routes /s/{tenant}/{token}(+/view,/prints,/slideshow) work identically to legacy /s/{token}. Tenant prefix is preserved through internal navigations. Admin QR dialog TEXT and Copy Link correctly display the branded URL. Tenant isolation confirmed via /api/share/{rose_token} which returns only Rose's branding (subdomain 'rose-photography'). 402 gallery-limit path verified by code inspection (server.py L1176-1178). ONE BUG FOUND: The QR image (backend-generated PNG) fails with HTTP 400 'No tenant context for this request' — QR endpoint decodes admin JWT but never calls use_tenant(), so db.shares access fails. Copy Link text and QR frame downloads still work; only the inline QR PNG is broken.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/admin/shares/{share_id}/qr", "issue": "Returns HTTP 400 'No tenant context for this request'. Endpoint reads admin JWT from ?token= query param and verifies role, but never sets tenant context. Subsequent db.shares.find_one() fails because TenantDBProxy has no tenant. Same bug affects GET /api/admin/shares/{share_id}/qr-frame (though the frame endpoint may partially work if it fetches share/gallery differently — both hit db.shares.find_one first). Result: inline QR PNG in admin QR dialog is broken (naturalWidth=0).", "priority": "HIGH"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Admin QR dialog", "issue": "QR image src returns 400; img shows alt text 'QR Code' as broken image. Root cause is backend (see backend_issues).", "affected_selectors": ["[role='dialog'] img", "[data-testid^='qr-share-']"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_15.json"],
+  "action_items": [
+    "Fix /api/admin/shares/{share_id}/qr and /qr-frame in server.py (~L1701 and L1729): after jwt.decode succeeds, call use_tenant(payload['tenant_id']) BEFORE any db.* access. Example: `payload = jwt.decode(...); if payload.get('role') != 'admin': raise 403; use_tenant(payload['tenant_id'])`. This unblocks the branded QR PNG display in the admin dialog."
+  ],
+  "critical_code_review_comments": [
+    "server.py QR endpoints violate tenant-context invariant: they authenticate manually via query-string JWT (a valid workaround for <img>) but forget to bind tenant. Every admin endpoint that bypasses get_admin (which does bind tenant) MUST call use_tenant() manually. Consider extracting a helper `verify_admin_token_and_bind(token)`.",
+    "server.py L292-301: _share_public_path() relies on current_tenant_id() implicitly, which is fine for /api/share/* (bound via tenant_context_dep) and for /api/admin/* endpoints that use get_admin — but WILL silently return the legacy /s/{token} form (no subdomain) if called from a code path without tenant context. Consider making tenant_id an explicit required arg or asserting."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "95% (share meta, share files, gallery listing, billing, share-list all OK; only QR PNG endpoint fails)", "frontend": "100% for Phase 5 routing/navigation (all 4 namespaced routes render, tenant prefix preserved, branded URL shown in QR dialog text and Copy Link)"},
+  "test_credentials": "mark/Test!2026, rose/Rose!2026 as documented",
+  "seed_data_creation": "None. Existing gina-mark share (no-password) reused. Rose's demo gallery+share (token mEqzhILOwfx2v4vKuHBewQ) used to verify tenant isolation via /api/share/{token} meta.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Phase 5 namespaced share routes verified working via browser at /s/weddings-by-mark/gina-mark(/view /prints /slideshow). URL after ShareAccess redirects to /s/weddings-by-mark/gina-mark/view (tenant preserved). Legacy /s/gina-mark still redirects to /s/gina-mark/view and renders the same gallery with 'Site Designed & Hosted by StudioApp' footer. Admin QR dialog at /admin/gallery/697be8fa-8a06-4a7b-b5de-aa05e2536bf6 shows the branded URL 'https://<host>/s/weddings-by-mark/gina-mark' as text but the QR <img> is broken (HTTP 400). Fix use_tenant() in QR endpoints then retest QR image loads.",
+  "rca of the issue": "STEPS TO REPRODUCE QR bug: 1) POST /api/admin/login {username:mark, password:Test!2026} → get token. 2) Open /admin/gallery/697be8fa-.../ → click qr-share-<id> button. 3) Network shows GET /api/admin/shares/02da9c5b-.../qr?base_url=...&token=<jwt> → 400 {'detail':'No tenant context for this request'}. RCA: In server.py L1701-1727, get_share_qr decodes JWT (verifies role) but never calls use_tenant(payload['tenant_id']). Line 1716 `await db.shares.find_one(...)` triggers _TenantDBProxy.__getattr__ which raises HTTPException(400, 'No tenant context...') because _ctx_tenant_id ContextVar was not set. MITIGATION: add `use_tenant(payload['tenant_id'])` immediately after jwt.decode success in BOTH get_share_qr (L1706) and get_share_qr_frame (L1735)."
+}

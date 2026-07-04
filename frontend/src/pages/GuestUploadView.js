@@ -9,8 +9,9 @@ import { Upload, Camera, Check, Heart, Image as ImageIcon, Film } from "lucide-r
 import { guestUpload, getGuestUploadCount, trackGalleryView, getErrorMessage, getShareInfo, brandingAssetUrl } from "@/lib/api";
 
 export default function GuestUploadView({ galleryName }) {
-  const { token } = useParams();
+  const { token, tenant } = useParams();
   const navigate = useNavigate();
+  const base = tenant ? `/s/${tenant}/${token}` : `/s/${token}`;
   const fileInputRef = useRef(null);
   
   const [uploading, setUploading] = useState(false);
@@ -39,7 +40,7 @@ export default function GuestUploadView({ galleryName }) {
 
   useEffect(() => {
     if (!localStorage.getItem("share_token")) {
-      navigate(`/s/${token}`);
+      navigate(base);
       return;
     }
     fetchUploadCount();

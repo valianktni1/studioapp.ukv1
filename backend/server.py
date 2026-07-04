@@ -289,6 +289,17 @@ async def get_super(authorization: str = Header(None)):
         raise HTTPException(status_code=403, detail="Super admin only")
     return payload
 
+async def _tenant_subdomain(tenant_id=None):
+    tid = tenant_id or current_tenant_id()
+    if not tid:
+        return ""
+    t = await control_db.tenants.find_one({"id": tid}, {"_id": 0, "subdomain": 1})
+    return (t or {}).get("subdomain") or ""
+
+async def _share_public_path(token: str) -> str:
+    sub = await _tenant_subdomain()
+    return f"/s/{sub}/{token}" if sub else f"/s/{token}"
+
 async def get_tenant_branding(tenant_id):
     if not tenant_id:
         return dict(DEFAULT_BRANDING)
@@ -1705,7 +1716,7 @@ async def get_share_qr(share_id: str, base_url: str = Query(...), token: Optiona
     share = await db.shares.find_one({"id": share_id}, {"_id": 0})
     if not share:
         raise HTTPException(status_code=404, detail="Share not found")
-    share_url = f"{base_url}/s/{share['token']}"
+    share_url = f"{base_url}{await _share_public_path(share['token'])}"
     qr = qrcode.QRCode(version=1, box_size=10, border=2)
     qr.add_data(share_url)
     qr.make(fit=True)
@@ -1750,7 +1761,7 @@ async def get_share_qr_frame(share_id: str, base_url: str = Query(...), token: O
     date_match = re.search(r'(\d{1,2})[./](\d{1,2})[./](\d{2,4})$', folder_name.strip())
     date_str = f"{date_match.group(1)}.{date_match.group(2)}.{date_match.group(3)}" if date_match else ""
     
-    share_url = f"{base_url}/s/{share['token']}"
+    share_url = f"{base_url}{await _share_public_path(share['token'])}"
     
     from PIL import ImageDraw, ImageFont
     
@@ -3697,7 +3708,7 @@ async def send_gallery_notification(gallery_id: str, request: Request, admin=Dep
         from urllib.parse import urlparse
         parsed = urlparse(origin)
         base_url = f"{parsed.scheme}://{parsed.netloc}"
-    gallery_link = f"{base_url}/s/{share['token']}"
+    gallery_link = f"{base_url}{await _share_public_path(share['token'])}"
     share_password = share.get("password_raw", "")
     
     couple_name = gallery["folder_name"]

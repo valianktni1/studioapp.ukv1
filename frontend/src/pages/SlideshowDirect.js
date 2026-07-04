@@ -4,8 +4,9 @@ import { getShareFiles, previewUrl } from "@/lib/api";
 import Slideshow from "@/pages/Slideshow";
 
 export default function SlideshowDirect() {
-  const { token } = useParams();
+  const { token, tenant } = useParams();
   const navigate = useNavigate();
+  const base = tenant ? `/s/${tenant}/${token}` : `/s/${token}`;
   const [photos, setPhotos] = useState(null);
   const [galleryId, setGalleryId] = useState(null);
   const [coupleName, setCoupleName] = useState("");
@@ -14,7 +15,7 @@ export default function SlideshowDirect() {
     const jwt = localStorage.getItem("share_token");
     const storedToken = localStorage.getItem("share_url_token");
     if (!jwt || storedToken !== token) {
-      navigate(`/s/${token}?next=slideshow`);
+      navigate(`${base}?next=slideshow`);
       return;
     }
 
@@ -36,12 +37,12 @@ export default function SlideshowDirect() {
       }
     }).catch(() => {
       localStorage.removeItem("share_token");
-      navigate(`/s/${token}?next=slideshow`);
+      navigate(`${base}?next=slideshow`);
     });
   }, [token, navigate]);
 
   const handleClose = useCallback(() => {
-    navigate(`/s/${token}/view`);
+    navigate(`${base}/view`);
   }, [token, navigate]);
 
   // Loading

@@ -27,7 +27,7 @@ import {
 import {
   getGallery, uploadFiles, deleteFile, deleteSubfolder, copyToSubfolder, adminDownloadFile,
   createShare, deleteShare, toggleShare, updateShareExpiry, getShareQR, getShareQRFrame, getQRDesignPreview, thumbUrl, setSubfolderCover,
-  updateGallery, sendGalleryNotification, getEmailTemplates, sendTemplateEmail
+  updateGallery, sendGalleryNotification, getEmailTemplates, sendTemplateEmail, getBranding
 } from "@/lib/api";
 
 export default function AdminGalleryDetail() {
@@ -80,6 +80,12 @@ export default function AdminGalleryDetail() {
   // File/bulk delete confirmation with backup option
   const [fileDeleteConfirm, setFileDeleteConfirm] = useState({ open: false, fileId: null, filename: "", deleteBackup: false, isBulk: false });
 
+  // Tenant subdomain for branded share URLs (/s/{subdomain}/{token})
+  const [subdomain, setSubdomain] = useState("");
+  const publicShareUrl = useCallback((token) => (
+    subdomain ? `${window.location.origin}/s/${subdomain}/${token}` : `${window.location.origin}/s/${token}`
+  ), [subdomain]);
+
   const loadGallery = useCallback(async () => {
     try {
       const res = await getGallery(id);
@@ -101,6 +107,7 @@ export default function AdminGalleryDetail() {
   useEffect(() => {
     if (!localStorage.getItem("admin_token")) { navigate("/admin"); return; }
     loadGallery();
+    getBranding().then(r => setSubdomain(r.data.subdomain || "")).catch(() => {});
   }, [navigate, loadGallery]);
 
   // Poll transcode status
@@ -343,7 +350,7 @@ export default function AdminGalleryDetail() {
   };
 
   const copyShareLink = (token) => {
-    navigator.clipboard.writeText(`${window.location.origin}/s/${token}`);
+    navigator.clipboard.writeText(publicShareUrl(token));
     toast.success("Share link copied");
   };
 
@@ -1033,7 +1040,7 @@ export default function AdminGalleryDetail() {
               <img src={`${getShareQR(showQR.id)}&token=${localStorage.getItem('admin_token')}`}
                 alt="QR Code" className="w-48 h-48" data-testid="qr-code-image" />
               <p className="text-sm font-medium break-all text-center" style={{ color: '#1C1917', fontFamily: 'Manrope, sans-serif' }}>
-                {window.location.origin}/s/{showQR.token}
+                {publicShareUrl(showQR.token)}
               </p>
               <Button onClick={() => copyShareLink(showQR.token)} className="w-full bg-[#1C1917] text-[#FDFCF8] rounded-sm px-6 py-2 text-xs tracking-wider uppercase font-bold gap-2">
                 <Copy className="w-3.5 h-3.5" /> Copy Link

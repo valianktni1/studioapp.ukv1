@@ -12,8 +12,9 @@ export default function ShareAccess() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const nextDest = searchParams.get('next');
+  const base = tenant ? `/s/${tenant}/${token}` : `/s/${token}`;
 
-  const redirectPath = nextDest === 'slideshow' ? `/s/${token}/slideshow` : `/s/${token}/view`;
+  const redirectPath = nextDest === 'slideshow' ? `${base}/slideshow` : `${base}/view`;
   const [shareInfo, setShareInfo] = useState(null);
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);

@@ -470,7 +470,10 @@ export default function Slideshow({ photos, galleryId, coupleName, onClose, shar
               <button data-testid="slideshow-share"
                 onClick={(e) => {
                   e.stopPropagation();
-                  const url = `${window.location.origin}/s/${shareToken}/slideshow`;
+                  const seg = window.location.pathname.split('/').filter(Boolean);
+                  const url = (seg[0] === 's' && seg[2] === shareToken)
+                    ? `${window.location.origin}/s/${seg[1]}/${shareToken}/slideshow`
+                    : `${window.location.origin}/s/${shareToken}/slideshow`;
                   navigator.clipboard.writeText(url).then(() => {
                     setLinkCopied(true);
                     setTimeout(() => setLinkCopied(false), 2500);
