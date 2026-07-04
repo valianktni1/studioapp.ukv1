@@ -45,6 +45,7 @@ function App() {
               <Route path="/super-admin/dashboard" element={<SuperAdminDashboard />} />
               <Route path="/superadmin/dashboard" element={<SuperAdminDashboard />} />
               <Route path="/s/:token" element={<ShareView />} />
+              <Route path="/s/:tenant/:slug" element={<ShareView />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </AuthProvider>

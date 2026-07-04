@@ -38,7 +38,8 @@ const Diamond = ({ accent }) => (
 );
 
 export default function ShareView() {
-  const { token } = useParams();
+  const params = useParams();
+  const token = params.slug || params.token;
   const [meta, setMeta] = useState(null);
   const [data, setData] = useState(null);
   useTitle(data?.gallery_name || meta?.gallery_name || "Gallery");
@@ -82,10 +83,10 @@ export default function ShareView() {
       pub.post(`/share/${token}/print-order/${oid}/capture`, { paypal_order_id: ppToken })
         .then(({ data }) => toast[data.paid ? "success" : "error"](data.paid ? "Payment complete — thank you! Your prints are on the way." : "Payment could not be completed."))
         .catch((e) => toast.error(apiError(e)))
-        .finally(() => window.history.replaceState({}, "", `/s/${token}`));
+        .finally(() => window.history.replaceState({}, "", window.location.pathname));
     } else if (sp.get("print_cancel")) {
       toast.info("Print order cancelled.");
-      window.history.replaceState({}, "", `/s/${token}`);
+      window.history.replaceState({}, "", window.location.pathname);
     }
   }, [token]); // eslint-disable-line
 

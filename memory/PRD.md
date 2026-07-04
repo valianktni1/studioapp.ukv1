@@ -113,3 +113,9 @@ Turn a single-tenant wedding photography gallery system into a **multi-tenant Sa
 - ShareCreate.allow_delete (models.py) stored on share (shares.py). Delete gating = allow_delete OR access_level=="full" (backward-compat). Payloads surface computed allow_delete.
 - Admin UI: checkbox "Allow clients to delete files" in create-share form (AdminGalleryDetail.js, data-testid sh-allow-delete).
 - TESTED: download-level share + toggle → delete works; download-level without toggle → 403.
+
+## Path-style namespaced share URLs (2026-06)
+- New public URL format: /s/{tenant.subdomain}/{slug} e.g. /s/weddingsbymark/couples-name. Chosen over subdomain style (weddingsbymark.domain.uk) to avoid wildcard DNS/SSL.
+- Frontend: App.js adds route /s/:tenant/:slug (kept /s/:token for backward compat). ShareView reads token = params.slug || params.token, so all /api/share/{id}/... calls are unchanged. PayPal replaceState uses window.location.pathname.
+- Admin: AdminGalleryDetail uses useAuth().tenant.subdomain via shareUrl(s) helper for copyLink, notify default + select options (email templates get the namespaced URL).
+- NOTE: slugs remain GLOBALLY unique (auto -N suffix); the tenant segment is branding/readability — the slug alone still resolves the share. TESTED: namespaced URL renders + old URL still works.

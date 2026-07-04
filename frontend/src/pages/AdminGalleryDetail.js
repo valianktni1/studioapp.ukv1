@@ -4,12 +4,20 @@ import { toast } from "sonner";
 import { ArrowLeft, Upload, Trash2, Link2, Plus, Copy, Power, Star, Loader2, Mail, QrCode } from "lucide-react";
 import AdminShell from "@/components/AdminShell";
 import { tenantApi, mediaUrl, apiError, formatBytes } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import useTitle from "@/lib/useTitle";
 
 const slugify = (s) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "folder";
 
 export default function AdminGalleryDetail() {
   const { id } = useParams();
+  const { tenant } = useAuth();
+  const shareUrl = (s) => {
+    const slug = s.custom_slug || s.token;
+    return tenant?.subdomain
+      ? `${window.location.origin}/s/${tenant.subdomain}/${slug}`
+      : `${window.location.origin}/s/${slug}`;
+  };
   const [gallery, setGallery] = useState(null);
   useTitle(gallery?.folder_name || "Gallery");
   const [active, setActive] = useState(null);
@@ -86,7 +94,7 @@ export default function AdminGalleryDetail() {
   };
 
   const copyLink = (s) => {
-    const url = `${window.location.origin}/s/${s.custom_slug || s.token}`;    navigator.clipboard.writeText(url); toast.success("Link copied");
+    const url = shareUrl(s);    navigator.clipboard.writeText(url); toast.success("Link copied");
   };
   const toggleShare = async (s) => { try { await tenantApi.put(`/admin/shares/${s.id}/toggle`); loadShares(); } catch (err) { toast.error(apiError(err)); } };
   const delShare = async (s) => { if (!window.confirm("Delete this link?")) return; try { await tenantApi.delete(`/admin/shares/${s.id}`); loadShares(); } catch (err) { toast.error(apiError(err)); } };
@@ -104,7 +112,7 @@ export default function AdminGalleryDetail() {
 
   const openNotify = () => {
     const first = shares.find((s) => s.is_active) || shares[0];
-    const url = first ? `${window.location.origin}/s/${first.custom_slug || first.token}` : "";
+    const url = first ? shareUrl(first) : "";
     setNotify({ to: gallery.client_email || "", share_url: url, password: "", message: "" });
     setTplId("");
     tenantApi.get("/admin/email-templates").then(({ data }) => setTemplates(data || [])).catch(() => {});
@@ -263,7 +271,7 @@ export default function AdminGalleryDetail() {
             <div><label className="sa-label block mb-2">Share link</label>
               <select className="sa-input" value={notify.share_url} onChange={(e) => setNotify({ ...notify, share_url: e.target.value })} data-testid="nf-share">
                 {shares.length === 0 && <option value="">No share links — create one first</option>}
-                {shares.map((s) => <option key={s.id} value={`${window.location.origin}/s/${s.custom_slug || s.token}`}>{s.label || (s.custom_slug || s.token)}{s.is_active ? "" : " (inactive)"}</option>)}
+                {shares.map((s) => <option key={s.id} value={shareUrl(s)}>{s.label || (s.custom_slug || s.token)}{s.is_active ? "" : " (inactive)"}</option>)}
               </select>
             </div>
             <div><label className="sa-label block mb-2">Password to include (optional)</label><input className="sa-input" value={notify.password} onChange={(e) => setNotify({ ...notify, password: e.target.value })} placeholder="If the link is password-protected" data-testid="nf-password" /></div>
