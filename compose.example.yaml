@@ -7,7 +7,7 @@ services:
 
   backend:
     build:
-      context: "https://github.com/valianktni1/studioapp.uk.git#main:backend"
+      context: "https://github.com/valianktni1/studioapp.ukv1.git#main:backend"
     restart: unless-stopped
     depends_on:
       - mongodb
@@ -37,7 +37,7 @@ services:
 
   nginx-video:
     build:
-      context: "https://github.com/valianktni1/studioapp.uk.git#main:nginx"
+      context: "https://github.com/valianktni1/studioapp.ukv1.git#main:nginx"
     restart: unless-stopped
     environment:
       - NGINX_VIDEO_SECRET=dc662f6eee919f8f9a6a1cf12c3a56986b8d26c7bf72a051
@@ -46,7 +46,7 @@ services:
 
   frontend:
     build:
-      context: "https://github.com/valianktni1/studioapp.uk.git#main:frontend"
+      context: "https://github.com/valianktni1/studioapp.ukv1.git#main:frontend"
       args:
         REACT_APP_BACKEND_URL: ""
     restart: unless-stopped
