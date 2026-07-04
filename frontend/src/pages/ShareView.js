@@ -402,7 +402,7 @@ function ShareViewFull() {
             <div className="flex items-center gap-3">
               {branding.logo_url
                 ? <img src={brandingAssetUrl(branding.logo_url)} alt={branding.business_name} className="h-8 object-contain" style={{ maxWidth: 200 }} />
-                : <span className="text-2xl font-medium tracking-tight" style={{ fontFamily: 'Cormorant Garamond, serif', color: (heroImageUrl || darkMode) ? '#fff' : undefined }}>{branding.business_name}</span>}
+                : <span className="text-2xl font-medium tracking-tight" style={{ fontFamily: 'Cormorant Garamond, serif', color: (heroImageUrl || darkMode) ? '#fff' : undefined }}>{branding.business_name || 'StudioApp'}</span>}
             </div>
             <div className="flex items-center gap-3">
               {/* Dark mode toggle */}

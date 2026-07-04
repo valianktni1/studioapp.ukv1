@@ -449,6 +449,9 @@ async def admin_upload_logo(file: UploadFile = File(...), admin=Depends(get_admi
     asset_id = str(uuid.uuid4())
     dest_dir = UPLOAD_DIR / tid / ".branding"
     dest_dir.mkdir(parents=True, exist_ok=True)
+    for old in dest_dir.glob("logo-*"):
+        try: old.unlink()
+        except OSError: pass
     dest = dest_dir / f"logo-{asset_id}.{ext}"
     with open(dest, "wb") as fh:
         fh.write(payload)
