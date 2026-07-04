@@ -12,21 +12,23 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import {
-  Camera, Plus, LogOut, FolderOpen, Share2, Trash2, Search, Copy, Layout, X, Settings, ArrowUpDown, Eye, HardDrive, Download, Users, CheckCircle, Monitor, Smartphone, Tablet, Film, Heart, Image as ImageIcon, Mail, Send, Clock, AlertCircle, FolderHeart, Palette
+  Camera, Plus, LogOut, FolderOpen, Share2, Trash2, Search, Copy, Layout, X, Settings, ArrowUpDown, Eye, HardDrive, Download, Users, CheckCircle, Monitor, Smartphone, Tablet, Film, Heart, Image as ImageIcon, Mail, Send, Clock, AlertCircle, FolderHeart, Palette, Zap
 } from "lucide-react";
 import {
-  listGalleries, createGallery, deleteGallery, getTemplates, createTemplate, deleteTemplate, thumbUrl, runBackup, getAllGalleriesStats, getLiveVisitors, getBroadcastPreview, sendBroadcastEmail, getDashboardStats, getBranding, brandingAssetUrl
+  listGalleries, createGallery, deleteGallery, getTemplates, createTemplate, deleteTemplate, thumbUrl, runBackup, getAllGalleriesStats, getLiveVisitors, getBroadcastPreview, sendBroadcastEmail, getDashboardStats, getBranding, brandingAssetUrl, getBilling
 } from "@/lib/api";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [galleries, setGalleries] = useState([]);
   const [branding, setBranding] = useState({ business_name: "", logo_url: "" });
+  const [billing, setBilling] = useState(null);
   const [templates, setTemplates] = useState([]);
   const [galleriesStats, setGalleriesStats] = useState({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => { getBranding().then(({ data }) => setBranding(data)).catch(() => {}); }, []);
+  useEffect(() => { getBilling().then(({ data }) => setBilling(data.usage)).catch(() => {}); }, []);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("date_desc");
   const [showCreate, setShowCreate] = useState(false);
@@ -215,6 +217,9 @@ export default function AdminDashboard() {
             <Button data-testid="activity-btn" variant="ghost" onClick={() => navigate("/admin/activity")} className="text-[#57534E] rounded-sm gap-2 text-xs tracking-wider">
               <Eye className="w-4 h-4" /> Activity
             </Button>
+            <Button data-testid="plan-btn" variant="ghost" onClick={() => navigate("/admin/billing")} className="text-[#57534E] rounded-sm gap-2 text-xs tracking-wider">
+              <Zap className="w-4 h-4" /> Plan
+            </Button>
             <Button data-testid="branding-btn" variant="ghost" onClick={() => navigate("/admin/branding")} className="text-[#57534E] rounded-sm gap-2 text-xs tracking-wider">
               <Palette className="w-4 h-4" /> Branding
             </Button>
@@ -232,6 +237,23 @@ export default function AdminDashboard() {
       </header>
 
       <main className="max-w-screen-xl mx-auto px-6 py-10">
+        {billing && (
+          <div data-testid="dash-usage-meter" onClick={() => navigate("/admin/billing")} className="mb-6 rounded-lg border p-4 cursor-pointer transition-colors hover:bg-black/[0.02]" style={{ borderColor: "rgba(0,0,0,0.1)" }}>
+            <div className="flex items-center justify-between text-sm mb-2">
+              <span className="font-medium">{billing.plan_info.label} plan · {billing.used} of {billing.limit} galleries used</span>
+              <span className="text-xs" style={{ color: "#57534E" }}>{Math.round((billing.used / billing.limit) * 100)}%</span>
+            </div>
+            <div className="h-2 rounded-full overflow-hidden" style={{ background: "#E7E5E4" }}>
+              <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, Math.round((billing.used / billing.limit) * 100))}%`, background: (billing.used / billing.limit) >= 0.9 ? "#DC2626" : (billing.used / billing.limit) >= 0.7 ? "#D4AF37" : "#1C1917" }} />
+            </div>
+            {(billing.used / billing.limit) >= 0.8 && (
+              <p className="text-xs mt-2 font-medium" style={{ color: "#B45309" }} data-testid="dash-upgrade-nudge">
+                You're nearly at your limit — click to upgrade and keep adding galleries this season →
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Dashboard Stats */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-5 gap-4 mb-10" data-testid="dashboard-stats">
           {[

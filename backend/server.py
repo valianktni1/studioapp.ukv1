@@ -19,6 +19,8 @@ from collections import defaultdict
 import time
 import jwt
 import bcrypt
+from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest
+
 from PIL import Image
 import aiofiles
 import qrcode
@@ -312,6 +314,8 @@ async def _provision_tenant(business_name, username, password, plan="starter", w
         "id": tenant_id, "subdomain": slug, "business_name": business_name,
         "accent_color": "#D4AF37", "logo_url": "", "contact_email": "", "tagline": "",
         "plan": plan, "status": "active",
+        "subscription_status": "trialing",
+        "trial_ends_at": (datetime.now(timezone.utc) + timedelta(days=TRIAL_DAYS)).isoformat(),
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
     if username and password:
@@ -467,6 +471,126 @@ async def serve_branding_asset(tenant_id: str, filename: str):
     ext = filename.rsplit(".", 1)[-1].lower()
     ctypes = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "webp": "image/webp", "gif": "image/gif", "svg": "image/svg+xml"}
     return FileResponse(str(path), media_type=ctypes.get(ext, "application/octet-stream"), headers={"Cache-Control": "public, max-age=3600"})
+
+
+# ─── Billing (Stripe) + trials + plan limits ───
+STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "sk_test_emergent")
+TRIAL_DAYS = int(os.environ.get("TRIAL_DAYS", "14"))
+
+def _stripe(request: Request):
+    host_url = str(request.base_url)
+    webhook_url = f"{host_url}api/webhook/stripe"
+    return StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+
+async def _tenant_usage(tenant_id):
+    t = await control_db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+    plan = PLANS.get((t or {}).get("plan", "starter"), PLANS["starter"])
+    use_tenant(tenant_id)
+    used = await db.galleries.count_documents({})
+    trial_ends = (t or {}).get("trial_ends_at")
+    sub_status = (t or {}).get("subscription_status", "trialing")
+    trial_active = False
+    if trial_ends:
+        try: trial_active = datetime.fromisoformat(trial_ends) > datetime.now(timezone.utc)
+        except Exception: trial_active = False
+    return {
+        "plan": (t or {}).get("plan", "starter"), "plan_info": plan,
+        "used": used, "limit": plan["gallery_limit"],
+        "subscription_status": sub_status, "trial_ends_at": trial_ends,
+        "trial_active": trial_active,
+        "period_end": (t or {}).get("current_period_end"),
+    }
+
+@api_router.get("/admin/billing")
+async def admin_billing(admin=Depends(get_admin)):
+    return {"usage": await _tenant_usage(admin["tenant_id"]), "plans": PLANS}
+
+class CheckoutReq(BaseModel):
+    plan: str
+    origin_url: str
+
+@api_router.post("/admin/billing/checkout")
+async def billing_checkout(data: CheckoutReq, request: Request, admin=Depends(get_admin)):
+    if data.plan not in PLANS:
+        raise HTTPException(status_code=400, detail="Invalid plan")
+    amount = float(PLANS[data.plan]["price"])  # server-side price only
+    origin = data.origin_url.rstrip("/")
+    success_url = f"{origin}/admin/billing?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{origin}/admin/billing"
+    sc = _stripe(request)
+    req = CheckoutSessionRequest(
+        amount=amount, currency="gbp", success_url=success_url, cancel_url=cancel_url,
+        metadata={"tenant_id": admin["tenant_id"], "plan": data.plan, "type": "subscription"},
+    )
+    session = await sc.create_checkout_session(req)
+    await control_db.payment_transactions.insert_one({
+        "id": str(uuid.uuid4()), "session_id": session.session_id,
+        "tenant_id": admin["tenant_id"], "plan": data.plan, "amount": amount, "currency": "gbp",
+        "payment_status": "initiated", "status": "open",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    return {"url": session.url, "session_id": session.session_id}
+
+async def _activate_subscription(tx):
+    """Idempotently activate a tenant's plan once its payment is confirmed paid."""
+    if tx.get("processed"):
+        return
+    period_end = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+    await control_db.tenants.update_one({"id": tx["tenant_id"]}, {"$set": {
+        "plan": tx["plan"], "subscription_status": "active", "current_period_end": period_end,
+    }})
+    await control_db.payment_transactions.update_one({"session_id": tx["session_id"]}, {"$set": {"processed": True}})
+
+@api_router.get("/admin/billing/status/{session_id}")
+async def billing_status(session_id: str, request: Request, admin=Depends(get_admin)):
+    tx = await control_db.payment_transactions.find_one({"session_id": session_id})
+    if not tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    sc = _stripe(request)
+    st = await sc.get_checkout_status(session_id)
+    await control_db.payment_transactions.update_one({"session_id": session_id},
+        {"$set": {"payment_status": st.payment_status, "status": st.status}})
+    if st.payment_status == "paid" and not tx.get("processed"):
+        await _activate_subscription(tx)
+    return {"payment_status": st.payment_status, "status": st.status, "plan": tx["plan"]}
+
+@api_router.post("/webhook/stripe")
+async def stripe_webhook(request: Request):
+    body = await request.body()
+    sig = request.headers.get("Stripe-Signature")
+    sc = _stripe(request)
+    try:
+        ev = await sc.handle_webhook(body, sig)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if ev.payment_status == "paid" and ev.session_id:
+        tx = await control_db.payment_transactions.find_one({"session_id": ev.session_id})
+        if tx and not tx.get("processed"):
+            await control_db.payment_transactions.update_one({"session_id": ev.session_id},
+                {"$set": {"payment_status": "paid", "status": "complete"}})
+            await _activate_subscription(tx)
+    return {"received": True}
+
+# ─── Self-serve signup ───
+class SignupReq(BaseModel):
+    business_name: str
+    username: str
+    password: str
+    plan: str = "starter"
+
+@api_router.post("/signup")
+async def self_signup(data: SignupReq):
+    if await control_db.admins.find_one({"username": data.username}):
+        raise HTTPException(status_code=400, detail="Username already in use")
+    if data.plan not in PLANS:
+        raise HTTPException(status_code=400, detail="Invalid plan")
+    tenant_id, slug = await _provision_tenant(data.business_name, data.username, data.password, data.plan, with_demo=True)
+    trial_ends = (datetime.now(timezone.utc) + timedelta(days=TRIAL_DAYS)).isoformat()
+    await control_db.tenants.update_one({"id": tenant_id}, {"$set": {"subscription_status": "trialing", "trial_ends_at": trial_ends}})
+    admin = await control_db.admins.find_one({"tenant_id": tenant_id})
+    token = create_jwt({"sub": admin["id"], "role": "admin", "username": data.username, "tenant_id": tenant_id})
+    return {"token": token, "username": data.username, "display_name": data.business_name, "trial_ends_at": trial_ends}
+
 
 
 # ─── File Helpers ───
@@ -1036,6 +1160,10 @@ async def delete_template(template_id: str, admin=Depends(get_admin)):
 # ─── Gallery (Couple Folder) CRUD ───
 @api_router.post("/admin/galleries")
 async def create_gallery(data: GalleryCreate, admin=Depends(get_admin)):
+    # Enforce plan gallery limit
+    usage = await _tenant_usage(admin["tenant_id"])
+    if usage["used"] >= usage["limit"]:
+        raise HTTPException(status_code=402, detail=f"You've reached your {usage['plan_info']['label']} plan limit of {usage['limit']} galleries. Upgrade your plan to add more.")
     # Get template subfolders
     subfolders = list(DEFAULT_SUBFOLDERS)
     if data.template_id:

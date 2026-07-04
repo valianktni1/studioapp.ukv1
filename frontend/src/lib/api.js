@@ -72,6 +72,12 @@ export const uploadBrandingLogo = (file) => {
   return apiClient.post('/admin/branding/logo', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
 };
 export const brandingAssetUrl = (path) => (path && path.startsWith('/api') ? `${BACKEND_URL}${path}` : path);
+
+// Billing
+export const getBilling = () => apiClient.get('/admin/billing');
+export const billingCheckout = (plan, originUrl) => apiClient.post('/admin/billing/checkout', { plan, origin_url: originUrl });
+export const billingStatus = (sessionId) => apiClient.get(`/admin/billing/status/${sessionId}`);
+export const signupTenant = (data) => apiClient.post('/signup', data);
 export const changePassword = (data) => apiClient.put('/admin/change-password', data);
 
 // 2FA
