@@ -28,6 +28,7 @@ function App() {
           <Route path="/admin/branding" element={<AdminBranding />} />
           <Route path="/admin/billing" element={<AdminBilling />} />
           <Route path="/super" element={<SuperAdmin />} />
+          <Route path="/superadmin" element={<SuperAdmin />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/admin/activity" element={<AdminActivity />} />
           <Route path="/s/:token" element={<ShareAccess />} />
