@@ -162,6 +162,9 @@ export default function AdminGalleryDetail() {
                     <span className="font-medium">{s.label || (s.guest_upload_mode ? "Guest Upload Link" : "Gallery Link")}</span>
                     <span style={{ color: "var(--sa-muted)" }}> &middot; {s.access_level}{s.has_password ? " · password" : ""}{s.expires_at ? ` · expires ${s.expires_at.slice(0,10)}` : ""}</span>
                     <span className="ml-2 text-xs" style={{ color: s.is_active ? "#4ade80" : "#f87171" }}>{s.is_active ? "active" : "inactive"}</span>
+                    {(s.allow_delete || s.access_level === "full") && (
+                      <span className="ml-2 text-xs px-2 py-0.5 rounded" style={{ background: "rgba(159,18,57,0.15)", color: "#fb7185" }} data-testid={`delete-badge-${s.id}`}>clients can delete</span>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <button className="sa-btn-ghost !p-2" onClick={() => setQrOpen(qrOpen === s.id ? null : s.id)} data-testid={`qr-${s.id}`}><QrCode size={14} /></button>
@@ -170,6 +173,13 @@ export default function AdminGalleryDetail() {
                     <button className="sa-btn-ghost !p-2" onClick={() => delShare(s)}><Trash2 size={14} color="#f87171" /></button>
                   </div>
                 </div>
+                <button onClick={() => copyLink(s)} title="Click to copy" data-testid={`share-link-${s.id}`}
+                  className="mt-1.5 flex items-center gap-1.5 text-xs font-mono max-w-full truncate transition-colors"
+                  style={{ color: "var(--sa-muted)" }}
+                  onMouseOver={(e) => (e.currentTarget.style.color = "var(--sa-gold)")}
+                  onMouseOut={(e) => (e.currentTarget.style.color = "var(--sa-muted)")}>
+                  <Copy size={11} className="shrink-0" /> <span className="truncate">{shareUrl(s).replace(/^https?:\/\//, "")}</span>
+                </button>
                 {qrOpen === s.id && (
                   <div className="flex items-center gap-2 mt-2" data-testid={`qr-menu-${s.id}`}>
                     <span className="text-xs" style={{ color: "var(--sa-muted)" }}>QR PDF:</span>

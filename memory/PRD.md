@@ -119,3 +119,6 @@ Turn a single-tenant wedding photography gallery system into a **multi-tenant Sa
 - Frontend: App.js adds route /s/:tenant/:slug (kept /s/:token for backward compat). ShareView reads token = params.slug || params.token, so all /api/share/{id}/... calls are unchanged. PayPal replaceState uses window.location.pathname.
 - Admin: AdminGalleryDetail uses useAuth().tenant.subdomain via shareUrl(s) helper for copyLink, notify default + select options (email templates get the namespaced URL).
 - NOTE: slugs remain GLOBALLY unique (auto -N suffix); the tenant segment is branding/readability — the slug alone still resolves the share. TESTED: namespaced URL renders + old URL still works.
+
+## Admin share-row polish (2026-06)
+- AdminGalleryDetail share rows now show the full pretty link inline (host/s/{subdomain}/{slug}) as a click-to-copy button (data-testid share-link-{id}), plus a "clients can delete" badge (data-testid delete-badge-{id}) when allow_delete or access_level==full. TESTED via screenshot.
