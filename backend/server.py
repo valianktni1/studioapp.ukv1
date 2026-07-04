@@ -1706,6 +1706,7 @@ async def get_share_qr(share_id: str, base_url: str = Query(...), token: Optiona
             payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
             if payload.get("role") != "admin":
                 raise HTTPException(status_code=403, detail="Admin access required")
+            use_tenant(payload["tenant_id"])
         except jwt.ExpiredSignatureError:
             raise HTTPException(status_code=401, detail="Token expired")
         except jwt.InvalidTokenError:
@@ -1735,6 +1736,7 @@ async def get_share_qr_frame(share_id: str, base_url: str = Query(...), token: O
             payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
             if payload.get("role") != "admin":
                 raise HTTPException(status_code=403, detail="Admin access required")
+            use_tenant(payload["tenant_id"])
         except jwt.ExpiredSignatureError:
             raise HTTPException(status_code=401, detail="Token expired")
         except jwt.InvalidTokenError:
