@@ -3357,6 +3357,43 @@ async def notify_tenant_order_paid(order: dict):
     except Exception as e:
         logger.error(f"notify_tenant_order_paid failed: {e}")
 
+async def notify_client_order_receipt(order: dict):
+    """Email the client a branded receipt/confirmation for their paid print order. Best-effort; never raises."""
+    try:
+        customer_email = (order.get("customer_email") or "").strip()
+        if not customer_email:
+            return
+        doc = await db.settings.find_one({"key": "smtp"}, {"_id": 0})
+        smtp = (doc or {}).get("value", {})
+        if not smtp.get("smtp_email") or not smtp.get("smtp_password") or not smtp.get("smtp_server"):
+            logger.info("Client receipt email skipped: tenant SMTP not configured")
+            return
+        studio = smtp.get("sender_name") or "your photographer"
+        ref = str(order.get("id", ""))[:8].upper()
+        items_rows = "".join([
+            f"<tr><td style='padding:6px 0;color:#57534E;font-size:14px;'>{i.get('quantity',1)}&times; {i.get('size_name','')} &middot; {i.get('finish','')} "
+            f"<span style='color:#A8A29E;'>({i.get('filename','')})</span></td>"
+            f"<td style='padding:6px 0;text-align:right;color:#1C1917;font-size:14px;'>&pound;{float(i.get('total',0)):.2f}</td></tr>"
+            for i in order.get("items", [])
+        ])
+        content = f"""
+<p style='font-size:18px;color:#1C1917;margin:0 0 8px;font-weight:bold;'>Thank you \u2014 your order is confirmed</p>
+<p style='font-size:14px;color:#57534E;margin:0 0 18px;'>We've received your payment for prints from <strong>{order.get('gallery_name','')}</strong>. {studio} will be in touch as your order is prepared.</p>
+<table width='100%' style='border-collapse:collapse;margin:0 0 16px;'>
+<tr><td colspan='2' style='color:#A8A29E;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;padding-bottom:8px;'>Receipt &middot; Order {ref}</td></tr>
+{items_rows}
+<tr><td style='padding:8px 0;border-top:1px solid #E8E4DC;color:#57534E;font-size:14px;'>Delivery</td><td style='padding:8px 0;border-top:1px solid #E8E4DC;text-align:right;font-size:14px;'>&pound;{float(order.get('shipping',0)):.2f}</td></tr>
+<tr><td style='padding:8px 0;font-weight:bold;color:#1C1917;font-size:15px;'>Total paid</td><td style='padding:8px 0;text-align:right;font-weight:bold;color:#1C1917;font-size:15px;'>&pound;{float(order.get('total',0)):.2f}</td></tr>
+</table>
+<p style='font-size:12px;color:#A8A29E;margin:0;'>Keep this email as your receipt. If you have any questions, just reply to this message.</p>
+"""
+        html = build_branded_email(content, get_awards_url(smtp))
+        subject = f"Your print order receipt \u2014 {order.get('gallery_name','')} (\u00a3{float(order.get('total',0)):.2f})"
+        threading.Thread(target=send_smtp_email, args=(smtp, customer_email, subject, html), daemon=True).start()
+        logger.info(f"Client receipt email queued to {customer_email} for order {ref}")
+    except Exception as e:
+        logger.error(f"notify_client_order_receipt failed: {e}")
+
 
 # ─── Print Shop Admin Endpoints ───
 @api_router.get("/admin/print-sizes")
@@ -3550,6 +3587,7 @@ async def update_order_paypal(token: str, order_id: str, paypal_order_id: str = 
     )
     if status == "paid" and order.get("status") != "paid":
         await notify_tenant_order_paid({**order, "status": "paid"})
+        await notify_client_order_receipt({**order, "status": "paid"})
     return {"success": True}
 
 @api_router.post("/share/{token}/print-order/{order_id}/paypal/create-order")
@@ -3616,6 +3654,7 @@ async def paypal_capture_order(token: str, order_id: str, session=Depends(get_sh
     )
     if completed:
         await notify_tenant_order_paid({**order, "status": "paid"})
+        await notify_client_order_receipt({**order, "status": "paid"})
     return {"status": "paid" if completed else pp.get("status", "pending")}
 
     """Get orders for this share"""
