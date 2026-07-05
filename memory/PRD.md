@@ -54,3 +54,10 @@ user "Mark"), tenants (photographers), and tenant customisation. Do NOT reinvent
 ## SUPER ADMIN v2 (2026-06)
 4-tab platform dashboard (SuperAdmin.js): Overview (tenants by status, galleries, MRR, total revenue, trials ending in 7 days), Photographers (existing tenant CRUD), Payments (control_db.payment_transactions table + paid total), Broadcast Email (platform SMTP in control_db.settings key 'platform_smtp' + send announcement to all photographers' contact/login emails). Backend endpoints: /super/overview, /super/payments, /super/email-settings (GET/POST + /test), /super/broadcast (+/recipients). Reuses send_smtp_email()/build_branded_email(). GET email-settings masks password; POST preserves on masked placeholder. Verified iteration_16 (100% frontend).
 Also this session: batched uploads (25 photos/req, videos 1/req) for 1000+ image drops; removed "delete from backup" checkbox from delete dialogs; index.html rebranded to StudioApp.
+
+## SUPER ADMIN v3 + branding (2026-06)
+- Extend Trial per tenant: POST /super/tenants/{id}/extend-trial ({days} adds to current end, or {forever:true} => trial_ends_at 9999 + trial_forever flag, shown as 'lifetime'). UI: ExtendTrialDialog (extend-days-btn / extend-forever-btn) on each photographer row.
+- Single-tenant email: POST /super/tenants/{id}/email (platform SMTP) via TenantEmailDialog (tenant-email-<id>).
+- Email templates CRUD: /super/email-templates (control_db.email_templates) via TemplatesManager in Email tab; template picker fills broadcast + single-send composers.
+- Branding: transparent StudioApp logo (/studioapp-logo.png) on AdminLogin + SuperAdmin (login & header). Login footer 'Site Designed & Hosted by StudioApp'. Client share footers now also show '© {year} {business_name}'. Login mobile faded hero background. Tenant admin Help Centre at /admin/help (StudioApp-branded, no Emergent refs).
+- Verified iteration_16 (super v2) + iteration_17 (extend/email/templates) — 100% frontend.
