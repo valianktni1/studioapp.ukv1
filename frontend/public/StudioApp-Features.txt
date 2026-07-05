@@ -1,0 +1,107 @@
+====================================================================
+STUDIOAPP — FEATURE LIST (Photographer & Client)
+For website / marketing use
+====================================================================
+
+
+--------------------------------------------------------------------
+FOR PHOTOGRAPHERS (YOUR STUDIO ACCOUNT)
+--------------------------------------------------------------------
+
+GETTING STARTED
+• Create your own studio account and start on a free trial
+• Simple, tiered plans — upgrade any time as you grow
+• Clean, modern admin dashboard to manage everything in one place
+• Built-in Help Centre with searchable step-by-step guides
+
+YOUR BRANDING
+• Upload your own studio logo
+• Set your studio name, tagline and contact email
+• Choose your accent colour to match your brand
+• Your branding appears across galleries, client pages and emails
+• Branded share links (e.g. yourdomain/s/your-studio/couple-name)
+
+GALLERIES
+• Create unlimited client galleries (within your plan)
+• Organise each gallery into multiple folders / sub-galleries
+• Save reusable folder templates to set up new galleries in seconds
+• Set a cover image for galleries and folders
+• Rename, reorganise and manage galleries with ease
+• Attach a client email address to each gallery
+
+UPLOADS
+• Upload thousands of photos in a single drop (1,000+ supported)
+• Smart batched uploading for fast, reliable large transfers
+• Live upload progress with clear success/failure feedback
+• Upload high-resolution images and video files
+• Automatic thumbnail generation for fast browsing
+• Copy or move images between folders
+
+VIDEO
+• Upload your films straight into a gallery
+• Automatic web-optimised versions created for smooth online playback
+• Hardware-accelerated processing for high-quality, fast delivery
+• Videos stream reliably to clients on any device
+
+SHARING WITH CLIENTS
+• Generate secure, branded share links for each gallery
+• Optional password protection on any share
+• Optional expiry dates to keep galleries time-limited
+• Control access levels — view-only or full download
+• Choose whether clients can download or delete
+• Custom, memorable link names (e.g. the couple's names)
+• Instant QR codes + downloadable QR code PDFs for prints/albums
+• Optional guest-upload mode so guests can add their own photos
+
+CLIENT EMAILS & AUTOMATION
+• Connect your own sending email (SMTP) to email from your address
+• Send a "your gallery is ready" notification with the link included
+• Reusable email templates for consistent, on-brand messaging
+• Broadcast a single message to all your clients at once
+• AUTOMATIC expiry reminders — clients are emailed 7 days before a
+  gallery closes, prompting them to download everything in good time
+  (sent once per gallery, signed with your studio name)
+
+PRINT SALES
+• Let clients order prints directly from their gallery
+• Receive and manage incoming print orders
+
+INSIGHTS & CONTROL
+• Activity tracking so you can see engagement on your galleries
+• Plan usage meter showing galleries used vs. your allowance
+• Full control to delete galleries or individual images
+• Everything kept private and separated per studio
+
+
+--------------------------------------------------------------------
+FOR YOUR CLIENTS (COUPLES & GUESTS)
+--------------------------------------------------------------------
+
+EFFORTLESS ACCESS
+• Open their gallery from a simple, branded link — no account needed
+• Works beautifully on phones, tablets and desktops
+• Secure password entry when the photographer enables it
+• Scan a QR code to jump straight to their gallery
+
+VIEWING
+• Browse the gallery by folders / moments
+• Fast, progressive image loading for a smooth experience
+• Full-screen lightbox viewing of every image
+• Elegant full-screen slideshow mode to relive the day
+
+VIDEO STREAMING
+• Stream their wedding/film videos online, right in the gallery
+• Smooth, buffer-friendly playback on any device — no downloads needed
+
+DOWNLOADS & FAVOURITES
+• Download high-resolution images (when enabled by the photographer)
+• Mark favourite photos to shortlist their best shots
+• Submit their favourites selection back to the photographer
+
+EXTRAS
+• Order prints directly from their gallery (when enabled)
+• Upload their own guest photos when guest-upload mode is on
+• Friendly automatic reminder email before the gallery expires, so
+  they never miss the chance to save their memories
+
+====================================================================
