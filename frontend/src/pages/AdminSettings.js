@@ -722,6 +722,14 @@ export default function AdminSettings() {
                       <p className="text-[11px]" style={{ color: '#A8A29E', fontFamily: 'Manrope, sans-serif' }}>
                         Your gallery domain — used to display your awards badge in emails
                       </p>
+                      {!smtpForm.site_url && (
+                        <div className="flex items-start gap-2 mt-2 p-2.5 rounded-sm" style={{ backgroundColor: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.3)' }} data-testid="site-url-logo-hint">
+                          <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" style={{ color: '#B45309' }} />
+                          <p className="text-[11px]" style={{ color: '#92400E', fontFamily: 'Manrope, sans-serif' }}>
+                            Add your Gallery Site URL so your <strong>studio logo appears in emails</strong> (order receipts, gallery-ready notices &amp; reminders). Without it, emails fall back to your studio name only.
+                          </p>
+                        </div>
+                      )}
                     </div>
                     <div className="flex gap-3 pt-2">
                       <Button onClick={handleSaveSMTP} disabled={savingSMTP} data-testid="save-smtp-btn"
