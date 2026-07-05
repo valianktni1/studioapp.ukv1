@@ -10,6 +10,7 @@ import AdminBranding from "@/pages/AdminBranding";
 import AdminBilling from "@/pages/AdminBilling";
 import Signup from "@/pages/Signup";
 import AdminActivity from "@/pages/AdminActivity";
+import AdminHelp from "@/pages/AdminHelp";
 import ShareAccess from "@/pages/ShareAccess";
 import ShareView from "@/pages/ShareView";
 import SlideshowDirect from "@/pages/SlideshowDirect";
@@ -31,6 +32,7 @@ function App() {
           <Route path="/superadmin" element={<SuperAdmin />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/admin/activity" element={<AdminActivity />} />
+          <Route path="/admin/help" element={<AdminHelp />} />
           <Route path="/s/:token" element={<ShareAccess />} />
           <Route path="/s/:token/view" element={<ShareView />} />
           <Route path="/s/:token/slideshow" element={<SlideshowDirect />} />

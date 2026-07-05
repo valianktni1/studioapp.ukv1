@@ -12,7 +12,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import {
-  Camera, Plus, LogOut, FolderOpen, Share2, Trash2, Search, Copy, Layout, X, Settings, ArrowUpDown, Eye, HardDrive, Download, Users, CheckCircle, Monitor, Smartphone, Tablet, Film, Heart, Image as ImageIcon, Mail, Send, Clock, AlertCircle, FolderHeart, Palette, Zap
+  Camera, Plus, LogOut, FolderOpen, Share2, Trash2, Search, Copy, Layout, X, Settings, ArrowUpDown, Eye, HardDrive, Download, Users, CheckCircle, Monitor, Smartphone, Tablet, Film, Heart, Image as ImageIcon, Mail, Send, Clock, AlertCircle, FolderHeart, Palette, Zap, HelpCircle
 } from "lucide-react";
 import {
   listGalleries, createGallery, deleteGallery, getTemplates, createTemplate, deleteTemplate, thumbUrl, runBackup, getAllGalleriesStats, getLiveVisitors, getBroadcastPreview, sendBroadcastEmail, getDashboardStats, getBranding, brandingAssetUrl, getBilling
@@ -222,6 +222,9 @@ export default function AdminDashboard() {
             </Button>
             <Button data-testid="branding-btn" variant="ghost" onClick={() => navigate("/admin/branding")} className="text-[#57534E] rounded-sm gap-2 text-xs tracking-wider">
               <Palette className="w-4 h-4" /> Branding
+            </Button>
+            <Button data-testid="help-btn" variant="ghost" onClick={() => navigate("/admin/help")} className="text-[#57534E] rounded-sm gap-2 text-xs tracking-wider">
+              <HelpCircle className="w-4 h-4" /> Help
             </Button>
             <Button data-testid="settings-btn" variant="ghost" onClick={() => navigate("/admin/settings")} className="text-[#57534E] rounded-sm gap-2 text-xs tracking-wider">
               <Settings className="w-4 h-4" /> Settings
