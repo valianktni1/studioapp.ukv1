@@ -356,21 +356,29 @@ async def _provision_tenant(business_name, username, password, plan="starter", w
             "display_name": business_name, "created_at": datetime.now(timezone.utc).isoformat(),
         })
     use_tenant(tenant_id)
-    await db.templates.insert_one({
-        "id": str(uuid.uuid4()), "name": "Default Wedding",
-        "subfolders": list(DEFAULT_SUBFOLDERS), "is_default": True,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-    })
-    if with_demo:
-        demo_name = "Demo - Emma & James 01.01.26"
-        await db.galleries.insert_one({
-            "id": str(uuid.uuid4()), "folder_name": demo_name,
-            "subfolders": list(DEFAULT_SUBFOLDERS), "template_id": None, "client_email": "",
-            "file_counts": {sf: 0 for sf in DEFAULT_SUBFOLDERS}, "is_demo": True,
+    # Templates + demo gallery are best-effort: a filesystem/DB hiccup here must NOT
+    # fail signup, otherwise the account gets created but the user sees an error.
+    try:
+        await db.templates.insert_one({
+            "id": str(uuid.uuid4()), "name": "Default Wedding",
+            "subfolders": list(DEFAULT_SUBFOLDERS), "is_default": True,
             "created_at": datetime.now(timezone.utc).isoformat(),
-            "updated_at": datetime.now(timezone.utc).isoformat(),
         })
-        (get_gallery_path(demo_name) / "Wedding Images").mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        logger.error(f"Provision: default template creation failed for {tenant_id}: {e}")
+    if with_demo:
+        try:
+            demo_name = "Demo - Emma & James 01.01.26"
+            await db.galleries.insert_one({
+                "id": str(uuid.uuid4()), "folder_name": demo_name,
+                "subfolders": list(DEFAULT_SUBFOLDERS), "template_id": None, "client_email": "",
+                "file_counts": {sf: 0 for sf in DEFAULT_SUBFOLDERS}, "is_demo": True,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+            })
+            (get_gallery_path(demo_name) / "Wedding Images").mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            logger.error(f"Provision: demo gallery creation failed for {tenant_id}: {e}")
     return tenant_id, slug
 
 class SuperLogin(BaseModel):

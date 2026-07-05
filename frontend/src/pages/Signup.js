@@ -28,7 +28,16 @@ export default function Signup() {
       localStorage.setItem("admin_token", data.token);
       toast.success("Welcome to StudioApp — your 14-day trial has started!");
       navigate("/admin/dashboard");
-    } catch (err) { toast.error(getErrorMessage(err)); setBusy(false); }
+    } catch (err) {
+      const msg = getErrorMessage(err);
+      if (/already in use|already exists/i.test(msg)) {
+        toast.error("That username already has an account — please sign in instead.");
+        setTimeout(() => navigate("/admin"), 1500);
+      } else {
+        toast.error(msg);
+      }
+      setBusy(false);
+    }
   };
 
   return (
