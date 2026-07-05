@@ -11,8 +11,9 @@ import {
 import {
   ArrowLeft, ShoppingCart, Plus, Minus, Trash2, Printer, Check
 } from "lucide-react";
+import { PayPalScriptProvider, PayPalButtons } from "@paypal/react-paypal-js";
 import {
-  getShareFiles, getSharePrintSizes, createPrintOrder, previewUrl
+  getShareFiles, getSharePrintSizes, createPrintOrder, previewUrl, paypalCreateOrder, paypalCaptureOrder
 } from "@/lib/api";
 
 export default function PrintShop() {
@@ -21,19 +22,20 @@ export default function PrintShop() {
   const cartRef = React.useRef(null);
   const base = tenant ? `/s/${tenant}/${token}` : `/s/${token}`;
   
-  const MINIMUM_ORDER = 15.00; // Minimum order value in GBP
-  
   const [galleryName, setGalleryName] = useState("");
   const [galleryId, setGalleryId] = useState(null);
   const [files, setFiles] = useState([]);
   const [printSizes, setPrintSizes] = useState([]);
   const [shippingCost, setShippingCost] = useState(2.50);
+  const [minimumOrder, setMinimumOrder] = useState(15.00);
+  const [paypalConfig, setPaypalConfig] = useState({ method: "none", handle: "", client_id: "", mode: "live" });
   const [loading, setLoading] = useState(true);
   
   const [cart, setCart] = useState([]); // [{file_id, filename, size_id, size_name, finish, quantity, unit_price}]
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [orderComplete, setOrderComplete] = useState(null);
+  const [paid, setPaid] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -56,6 +58,8 @@ export default function PrintShop() {
       
       setPrintSizes(sizesRes.data.sizes);
       setShippingCost(sizesRes.data.shipping_cost);
+      if (sizesRes.data.minimum_order != null) setMinimumOrder(sizesRes.data.minimum_order);
+      if (sizesRes.data.paypal) setPaypalConfig(sizesRes.data.paypal);
     } catch (err) {
       toast.error("Failed to load print shop");
       navigate(`${base}/view`);
@@ -130,8 +134,8 @@ export default function PrintShop() {
       toast.error("Your cart is empty");
       return;
     }
-    if (subtotal < MINIMUM_ORDER) {
-      toast.error(`Minimum order is £${MINIMUM_ORDER.toFixed(2)} (excluding shipping)`);
+    if (subtotal < minimumOrder) {
+      toast.error(`Minimum order is £${minimumOrder.toFixed(2)} (excluding shipping)`);
       return;
     }
 
@@ -176,41 +180,72 @@ export default function PrintShop() {
 
   // Order complete view
   if (orderComplete) {
-    const paypalLink = `https://paypal.me/weddingsbymark/${orderComplete.total.toFixed(2)}GBP`;
-    
+    const paypalMeLink = paypalConfig.handle
+      ? `https://paypal.me/${paypalConfig.handle}/${orderComplete.total.toFixed(2)}GBP`
+      : null;
+
     return (
       <div className="min-h-screen" style={{ backgroundColor: '#FDFCF8' }}>
         <div className="max-w-lg mx-auto px-6 py-12 text-center">
           <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-green-100 flex items-center justify-center">
             <Check className="w-8 h-8 text-green-600" />
           </div>
-          <h1 className="text-3xl mb-4 font-medium" style={{ fontFamily: 'Cormorant Garamond, serif' }}>Order Received!</h1>
+          <h1 className="text-3xl mb-4 font-medium" style={{ fontFamily: 'Cormorant Garamond, serif' }}>
+            {paid ? "Payment Complete!" : "Order Received!"}
+          </h1>
           <p className="text-[#57534E] mb-6" style={{ fontFamily: 'Manrope, sans-serif' }}>
-            Your print order has been submitted. Please complete payment via PayPal to confirm your order.
+            {paid
+              ? "Thank you! Your payment was successful and your print order is confirmed."
+              : paypalConfig.method === "none"
+                ? "Your print order has been submitted. The photographer will be in touch to arrange payment."
+                : "Your print order has been submitted. Please complete payment below to confirm your order."}
           </p>
-          
+
           <div className="border rounded-sm p-6 mb-6 text-left" style={{ borderColor: 'rgba(212,175,55,0.15)' }}>
             <p className="text-xs uppercase text-[#A8A29E] mb-2">Order Total</p>
             <p className="text-3xl font-bold mb-4">£{orderComplete.total.toFixed(2)}</p>
-            
-            <p className="text-xs text-[#A8A29E] mb-4">
+            <p className="text-xs text-[#A8A29E]">
               Order reference: <code className="bg-[#F5F2EB] px-2 py-1 font-mono">{orderComplete.order_id.slice(0,8).toUpperCase()}</code>
-            </p>
-            <p className="text-sm text-[#57534E] mb-2">
-              Please include your order reference in the PayPal payment note.
             </p>
           </div>
 
-          <a href={paypalLink} target="_blank" rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-2 bg-[#0070BA] text-white rounded-sm px-8 py-3 text-sm font-bold tracking-wider uppercase mb-4 hover:bg-[#003087] transition-colors">
-            Pay with PayPal
-          </a>
-          
-          <p className="text-xs text-[#A8A29E] mb-6">
-            You'll be redirected to PayPal to complete your payment of £{orderComplete.total.toFixed(2)}
-          </p>
+          {!paid && paypalConfig.method === "api" && paypalConfig.client_id && (
+            <div className="mb-4" data-testid="paypal-buttons-wrap">
+              <PayPalScriptProvider options={{ clientId: paypalConfig.client_id, currency: "GBP", intent: "capture" }}>
+                <PayPalButtons
+                  style={{ layout: "vertical", color: "gold", shape: "rect", label: "pay" }}
+                  createOrder={async () => {
+                    const res = await paypalCreateOrder(token, orderComplete.order_id);
+                    return res.data.paypal_order_id;
+                  }}
+                  onApprove={async () => {
+                    try {
+                      await paypalCaptureOrder(token, orderComplete.order_id);
+                      setPaid(true);
+                      toast.success("Payment complete! Thank you.");
+                    } catch (err) {
+                      toast.error(err.response?.data?.detail || "Payment could not be captured");
+                    }
+                  }}
+                  onError={() => toast.error("PayPal error — please try again")}
+                />
+              </PayPalScriptProvider>
+            </div>
+          )}
 
-          <Button variant="ghost" onClick={() => navigate(`${base}/view`)} className="text-[#57534E]">
+          {!paid && paypalConfig.method === "paypalme" && paypalMeLink && (
+            <>
+              <a href={paypalMeLink} target="_blank" rel="noopener noreferrer" data-testid="paypalme-link"
+                className="inline-flex items-center justify-center gap-2 bg-[#0070BA] text-white rounded-sm px-8 py-3 text-sm font-bold tracking-wider uppercase mb-4 hover:bg-[#003087] transition-colors">
+                Pay with PayPal
+              </a>
+              <p className="text-xs text-[#A8A29E] mb-2">
+                You'll be taken to PayPal to pay £{orderComplete.total.toFixed(2)}. Please include your order reference in the note.
+              </p>
+            </>
+          )}
+
+          <Button variant="ghost" onClick={() => navigate(`${base}/view`)} className="text-[#57534E] mt-2">
             Back to Gallery
           </Button>
         </div>
@@ -256,7 +291,7 @@ export default function PrintShop() {
               <div className="mb-4 p-3 rounded-sm flex items-center gap-3" style={{ backgroundColor: 'rgba(212,175,55,0.08)', border: '1px solid rgba(212,175,55,0.2)' }}>
                 <Printer className="w-5 h-5 text-[#D4AF37] flex-shrink-0" />
                 <p className="text-sm" style={{ color: '#57534E', fontFamily: 'Manrope, sans-serif' }}>
-                  <strong>Minimum order: £{MINIMUM_ORDER.toFixed(2)}</strong> — Select your photos, choose size and finish, then add to cart.
+                  <strong>Minimum order: £{minimumOrder.toFixed(2)}</strong> — Select your photos, choose size and finish, then add to cart.
                 </p>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -324,25 +359,27 @@ export default function PrintShop() {
                     <Input type="email" value={email} onChange={e => setEmail(e.target.value)}
                       placeholder="your@email.com" className="border-[#D4D4D8] rounded-sm" />
                   </div>
-                  {subtotal < MINIMUM_ORDER && cart.length > 0 && (
+                  {subtotal < minimumOrder && cart.length > 0 && (
                     <div className="p-3 rounded-sm text-center" style={{ backgroundColor: 'rgba(212,175,55,0.1)', border: '1px solid rgba(212,175,55,0.3)' }}>
                       <p className="text-sm font-medium" style={{ color: '#92400E' }}>
-                        Minimum order: £{MINIMUM_ORDER.toFixed(2)}
+                        Minimum order: £{minimumOrder.toFixed(2)}
                       </p>
                       <p className="text-xs" style={{ color: '#A8A29E' }}>
-                        Add £{(MINIMUM_ORDER - subtotal).toFixed(2)} more to checkout
+                        Add £{(minimumOrder - subtotal).toFixed(2)} more to checkout
                       </p>
                     </div>
                   )}
                   <Button 
                     onClick={handleCheckout} 
-                    disabled={submitting || subtotal < MINIMUM_ORDER} 
-                    className={`w-full rounded-sm ${subtotal >= MINIMUM_ORDER ? 'bg-[#1C1917] text-[#FDFCF8]' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
+                    disabled={submitting || subtotal < minimumOrder} 
+                    className={`w-full rounded-sm ${subtotal >= minimumOrder ? 'bg-[#1C1917] text-[#FDFCF8]' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
                   >
-                    {submitting ? "Processing..." : "Checkout with PayPal"}
+                    {submitting ? "Processing..." : (paypalConfig.method === "none" ? "Place Order" : "Checkout")}
                   </Button>
                   <p className="text-xs text-center text-[#A8A29E]">
-                    You'll be redirected to PayPal to complete payment
+                    {paypalConfig.method === "none"
+                      ? "The photographer will contact you to arrange payment"
+                      : "You'll complete payment via PayPal on the next step"}
                   </p>
                 </div>
               </>

@@ -43,6 +43,7 @@ export default function AdminDashboard() {
   const [broadcastRecipients, setBroadcastRecipients] = useState([]);
   const [sendingBroadcast, setSendingBroadcast] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, id: null, name: "", deleteBackup: false });
+  const [upgradeDialog, setUpgradeDialog] = useState({ open: false, message: "" });
 
   const load = useCallback(async () => {
     try {
@@ -130,7 +131,12 @@ export default function AdminDashboard() {
       setForm({ folder_name: "", template_id: "", client_email: "" });
       navigate(`/admin/gallery/${res.data.id}`);
     } catch (err) {
-      toast.error(err.response?.data?.detail || "Failed to create");
+      if (err.response?.status === 402) {
+        setShowCreate(false);
+        setUpgradeDialog({ open: true, message: err.response?.data?.detail || "You've reached your gallery limit. Please upgrade to add more." });
+      } else {
+        toast.error(err.response?.data?.detail || "Failed to create");
+      }
     } finally {
       setCreating(false);
     }
@@ -583,8 +589,32 @@ export default function AdminDashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* Broadcast Email Dialog */}
-      <Dialog open={showBroadcast} onOpenChange={setShowBroadcast}>
+      {/* Trial / Plan Limit Upgrade Dialog */}
+      <Dialog open={upgradeDialog.open} onOpenChange={(open) => setUpgradeDialog(d => ({ ...d, open }))}>
+        <DialogContent className="border-none shadow-2xl rounded-none max-w-md" style={{ backgroundColor: '#FDFCF8' }} data-testid="upgrade-dialog">
+          <DialogHeader>
+            <div className="w-12 h-12 rounded-full flex items-center justify-center mb-2" style={{ backgroundColor: 'rgba(212,175,55,0.12)' }}>
+              <Zap className="w-6 h-6" style={{ color: '#D4AF37' }} />
+            </div>
+            <DialogTitle className="text-2xl font-medium" style={{ fontFamily: 'Cormorant Garamond, serif' }}>Gallery limit reached</DialogTitle>
+            <DialogDescription style={{ color: '#57534E', fontFamily: 'Manrope, sans-serif' }}>
+              {upgradeDialog.message}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="mt-4 flex gap-2">
+            <Button variant="outline" onClick={() => setUpgradeDialog({ open: false, message: "" })}
+              className="flex-1 rounded-sm border-[#D4D4D8] text-xs tracking-wider" data-testid="upgrade-later-btn">
+              Maybe Later
+            </Button>
+            <Button data-testid="upgrade-now-btn" onClick={() => { setUpgradeDialog({ open: false, message: "" }); navigate("/admin/billing"); }}
+              className="flex-1 bg-[#1C1917] text-[#FDFCF8] hover:bg-[#1C1917]/90 rounded-sm text-xs tracking-wider uppercase font-bold gap-2">
+              <Zap className="w-3.5 h-3.5" /> Upgrade Now
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Broadcast Email Dialog */}      <Dialog open={showBroadcast} onOpenChange={setShowBroadcast}>
         <DialogContent className="border-none shadow-2xl rounded-none max-w-lg" style={{ backgroundColor: '#FDFCF8' }}>
           <DialogHeader>
             <DialogTitle className="text-3xl font-medium" style={{ fontFamily: 'Cormorant Garamond, serif' }}>Broadcast Email</DialogTitle>

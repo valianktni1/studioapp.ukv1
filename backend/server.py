@@ -24,6 +24,7 @@ from emergentintegrations.payments.stripe.checkout import StripeCheckout, Checko
 from PIL import Image
 import aiofiles
 import qrcode
+import httpx
 import asyncio
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -205,7 +206,18 @@ class PrintOrderCreate(BaseModel):
     items: List[PrintOrderItem]
     customer_email: str
 
-SHIPPING_COST = 2.50  # UK flat rate
+class PrintSettings(BaseModel):
+    shipping_cost: float = 2.50
+    minimum_order: float = 15.00
+    paypal_method: str = "none"  # none | paypalme | api
+    paypalme_handle: Optional[str] = ""
+    paypal_client_id: Optional[str] = ""
+    paypal_secret: Optional[str] = None
+    paypal_mode: str = "live"  # live | sandbox
+
+SHIPPING_COST = 2.50  # UK flat rate (default; tenants can override in Settings)
+DEFAULT_MINIMUM_ORDER = 15.00  # default minimum print order (GBP)
+TRIAL_GALLERY_LIMIT = 3  # trial tenants (not lifetime) are capped at this many galleries
 
 # ─── Rate Limiting Helper ───
 def check_rate_limit(ip: str) -> bool:
@@ -777,17 +789,27 @@ def _stripe(request: Request):
 async def _tenant_usage(tenant_id):
     t = await control_db.tenants.find_one({"id": tenant_id}, {"_id": 0})
     plan = PLANS.get((t or {}).get("plan", "starter"), PLANS["starter"])
+    plan_limit = plan["gallery_limit"]
     use_tenant(tenant_id)
     used = await db.galleries.count_documents({})
     trial_ends = (t or {}).get("trial_ends_at")
     sub_status = (t or {}).get("subscription_status", "trialing")
+    trial_forever = bool((t or {}).get("trial_forever", False))
     trial_active = False
     if trial_ends:
         try: trial_active = datetime.fromisoformat(trial_ends) > datetime.now(timezone.utc)
         except Exception: trial_active = False
+    # Trial tenants (14-day, not lifetime) are capped at TRIAL_GALLERY_LIMIT.
+    # Lifetime-trial tenants (granted by super admin) get their full plan limit.
+    effective_limit = plan_limit
+    is_trial_limited = False
+    if sub_status == "trialing" and not trial_forever:
+        effective_limit = min(TRIAL_GALLERY_LIMIT, plan_limit)
+        is_trial_limited = True
     return {
         "plan": (t or {}).get("plan", "starter"), "plan_info": plan,
-        "used": used, "limit": plan["gallery_limit"],
+        "used": used, "limit": effective_limit, "plan_limit": plan_limit,
+        "is_trial_limited": is_trial_limited, "trial_forever": trial_forever,
         "subscription_status": sub_status, "trial_ends_at": trial_ends,
         "trial_active": trial_active,
         "period_end": (t or {}).get("current_period_end"),
@@ -1467,6 +1489,8 @@ async def create_gallery(data: GalleryCreate, admin=Depends(get_admin)):
     # Enforce plan gallery limit
     usage = await _tenant_usage(admin["tenant_id"])
     if usage["used"] >= usage["limit"]:
+        if usage.get("is_trial_limited"):
+            raise HTTPException(status_code=402, detail=f"While on your free trial you're limited to {usage['limit']} galleries. Please upgrade to a paid plan to add more.")
         raise HTTPException(status_code=402, detail=f"You've reached your {usage['plan_info']['label']} plan limit of {usage['limit']} galleries. Upgrade your plan to add more.")
     # Get template subfolders
     subfolders = list(DEFAULT_SUBFOLDERS)
@@ -3237,6 +3261,68 @@ async def guest_delete_files(token: str, data: DeleteFilesRequest, session=Depen
     
     return {"deleted": deleted}
 
+# ─── Per-tenant Print / Payment Settings ───
+async def get_print_settings():
+    """Fetch this tenant's print/payment settings (with sensible defaults)."""
+    doc = await db.settings.find_one({"key": "print_settings"}, {"_id": 0})
+    v = (doc or {}).get("value", {})
+    method = v.get("paypal_method")
+    if not method:
+        method = "paypalme" if v.get("paypalme_handle") else "none"
+    return {
+        "shipping_cost": float(v.get("shipping_cost", SHIPPING_COST)),
+        "minimum_order": float(v.get("minimum_order", DEFAULT_MINIMUM_ORDER)),
+        "paypal_method": method,
+        "paypalme_handle": v.get("paypalme_handle", "") or "",
+        "paypal_client_id": v.get("paypal_client_id", "") or "",
+        "paypal_secret": v.get("paypal_secret", "") or "",
+        "paypal_mode": v.get("paypal_mode", "live") or "live",
+    }
+
+@api_router.get("/admin/settings/print")
+async def get_print_settings_admin(admin=Depends(get_admin)):
+    """Get delivery + PayPal settings (secret masked)."""
+    ps = await get_print_settings()
+    return {**ps, "paypal_secret": "••••••••" if ps.get("paypal_secret") else ""}
+
+@api_router.post("/admin/settings/print")
+async def save_print_settings_admin(data: PrintSettings, admin=Depends(get_admin)):
+    existing = await db.settings.find_one({"key": "print_settings"}, {"_id": 0})
+    prev = (existing or {}).get("value", {})
+    value = {
+        "shipping_cost": max(0.0, float(data.shipping_cost)),
+        "minimum_order": max(0.0, float(data.minimum_order)),
+        "paypal_method": data.paypal_method if data.paypal_method in ("none", "paypalme", "api") else "none",
+        "paypalme_handle": (data.paypalme_handle or "").strip().lstrip("@").replace("paypal.me/", "").strip("/"),
+        "paypal_client_id": (data.paypal_client_id or "").strip(),
+        "paypal_mode": data.paypal_mode if data.paypal_mode in ("live", "sandbox") else "live",
+    }
+    # Preserve secret when the masked placeholder is submitted
+    if data.paypal_secret and data.paypal_secret != "••••••••":
+        value["paypal_secret"] = data.paypal_secret.strip()
+    elif prev.get("paypal_secret"):
+        value["paypal_secret"] = prev["paypal_secret"]
+    await db.settings.update_one({"key": "print_settings"}, {"$set": {"key": "print_settings", "value": value}}, upsert=True)
+    return {"success": True}
+
+# ─── PayPal REST helpers (per-tenant credentials) ───
+def _paypal_base(mode: str) -> str:
+    return "https://api-m.sandbox.paypal.com" if mode == "sandbox" else "https://api-m.paypal.com"
+
+async def _paypal_access_token(client_id: str, secret: str, mode: str) -> str:
+    async with httpx.AsyncClient(timeout=20) as client:
+        resp = await client.post(
+            f"{_paypal_base(mode)}/v1/oauth2/token",
+            auth=(client_id, secret),
+            data={"grant_type": "client_credentials"},
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+    if resp.status_code != 200:
+        logger.error(f"PayPal token error {resp.status_code}: {resp.text[:200]}")
+        raise HTTPException(status_code=502, detail="Could not authenticate with PayPal. Check the photographer's PayPal credentials.")
+    return resp.json()["access_token"]
+
+
 # ─── Print Shop Admin Endpoints ───
 @api_router.get("/admin/print-sizes")
 async def list_print_sizes(admin=Depends(get_admin)):
@@ -3309,12 +3395,23 @@ async def update_order_status(order_id: str, status: str = Query(...), admin=Dep
 # ─── Print Shop Public Endpoints (for couples via share) ───
 @api_router.get("/share/{token}/print-sizes")
 async def get_print_sizes_for_share(token: str):
-    """Get available print sizes for ordering"""
+    """Get available print sizes + delivery/payment config for ordering"""
     share = await db.shares.find_one({"token": token}, {"_id": 0})
     if not share or is_share_expired(share):
         raise HTTPException(status_code=404, detail="Share not found or expired")
     sizes = await db.print_sizes.find({"is_active": True}, {"_id": 0}).sort("name", 1).to_list(100)
-    return {"sizes": sizes, "shipping_cost": SHIPPING_COST}
+    ps = await get_print_settings()
+    return {
+        "sizes": sizes,
+        "shipping_cost": ps["shipping_cost"],
+        "minimum_order": ps["minimum_order"],
+        "paypal": {
+            "method": ps["paypal_method"],
+            "handle": ps["paypalme_handle"],
+            "client_id": ps["paypal_client_id"] if ps["paypal_method"] == "api" else "",
+            "mode": ps["paypal_mode"],
+        },
+    }
 
 @api_router.post("/share/{token}/print-order")
 async def create_print_order(token: str, data: PrintOrderCreate, session=Depends(get_share_session)):
@@ -3362,7 +3459,12 @@ async def create_print_order(token: str, data: PrintOrderCreate, session=Depends
             "total": item_total
         })
     
-    total = subtotal + SHIPPING_COST
+    ps = await get_print_settings()
+    shipping = ps["shipping_cost"]
+    minimum_order = ps["minimum_order"]
+    if subtotal < minimum_order:
+        raise HTTPException(status_code=400, detail=f"Minimum order is £{minimum_order:.2f} (excluding delivery)")
+    total = subtotal + shipping
     
     # Create order
     order_id = str(uuid.uuid4())
@@ -3374,7 +3476,7 @@ async def create_print_order(token: str, data: PrintOrderCreate, session=Depends
         "customer_email": data.customer_email,
         "items": order_items,
         "subtotal": subtotal,
-        "shipping": SHIPPING_COST,
+        "shipping": shipping,
         "total": total,
         "currency": "GBP",
         "status": "pending",
@@ -3386,11 +3488,11 @@ async def create_print_order(token: str, data: PrintOrderCreate, session=Depends
     
     await db.print_orders.insert_one(order_doc)
     
-    # Return order details - frontend will redirect to PayPal
+    # Return order details - frontend will handle PayPal
     return {
         "order_id": order_id,
         "subtotal": subtotal,
-        "shipping": SHIPPING_COST,
+        "shipping": shipping,
         "total": total,
         "currency": "GBP",
         "items": order_items
@@ -3413,8 +3515,70 @@ async def update_order_paypal(token: str, order_id: str, paypal_order_id: str = 
     )
     return {"success": True}
 
-@api_router.get("/share/{token}/print-orders")
-async def get_my_print_orders(token: str, session=Depends(get_share_session)):
+@api_router.post("/share/{token}/print-order/{order_id}/paypal/create-order")
+async def paypal_create_order(token: str, order_id: str, session=Depends(get_share_session)):
+    """Create a PayPal order using the tenant's own PayPal API credentials."""
+    if session.get("token") != token:
+        raise HTTPException(status_code=403, detail="Access denied")
+    order = await db.print_orders.find_one({"id": order_id, "share_token": token}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    ps = await get_print_settings()
+    if ps["paypal_method"] != "api" or not ps["paypal_client_id"] or not ps["paypal_secret"]:
+        raise HTTPException(status_code=400, detail="PayPal is not configured for this studio")
+    token_val = await _paypal_access_token(ps["paypal_client_id"], ps["paypal_secret"], ps["paypal_mode"])
+    body = {
+        "intent": "CAPTURE",
+        "purchase_units": [{
+            "reference_id": order_id,
+            "description": f"Print order {order_id[:8].upper()}",
+            "amount": {"currency_code": "GBP", "value": f"{order['total']:.2f}"},
+        }],
+    }
+    async with httpx.AsyncClient(timeout=20) as client:
+        resp = await client.post(
+            f"{_paypal_base(ps['paypal_mode'])}/v2/checkout/orders",
+            json=body,
+            headers={"Authorization": f"Bearer {token_val}", "Content-Type": "application/json"},
+        )
+    if resp.status_code not in (200, 201):
+        logger.error(f"PayPal create-order error {resp.status_code}: {resp.text[:300]}")
+        raise HTTPException(status_code=502, detail="Could not create PayPal order")
+    pp = resp.json()
+    await db.print_orders.update_one(
+        {"id": order_id},
+        {"$set": {"paypal_order_id": pp["id"], "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"paypal_order_id": pp["id"]}
+
+@api_router.post("/share/{token}/print-order/{order_id}/paypal/capture")
+async def paypal_capture_order(token: str, order_id: str, session=Depends(get_share_session)):
+    """Capture a PayPal order and mark the print order as paid."""
+    if session.get("token") != token:
+        raise HTTPException(status_code=403, detail="Access denied")
+    order = await db.print_orders.find_one({"id": order_id, "share_token": token}, {"_id": 0})
+    if not order or not order.get("paypal_order_id"):
+        raise HTTPException(status_code=404, detail="Order not found")
+    ps = await get_print_settings()
+    if ps["paypal_method"] != "api":
+        raise HTTPException(status_code=400, detail="PayPal is not configured for this studio")
+    token_val = await _paypal_access_token(ps["paypal_client_id"], ps["paypal_secret"], ps["paypal_mode"])
+    async with httpx.AsyncClient(timeout=20) as client:
+        resp = await client.post(
+            f"{_paypal_base(ps['paypal_mode'])}/v2/checkout/orders/{order['paypal_order_id']}/capture",
+            headers={"Authorization": f"Bearer {token_val}", "Content-Type": "application/json"},
+        )
+    if resp.status_code not in (200, 201):
+        logger.error(f"PayPal capture error {resp.status_code}: {resp.text[:300]}")
+        raise HTTPException(status_code=502, detail="Payment could not be captured")
+    pp = resp.json()
+    completed = pp.get("status") == "COMPLETED"
+    await db.print_orders.update_one(
+        {"id": order_id},
+        {"$set": {"status": "paid" if completed else "pending", "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"status": "paid" if completed else pp.get("status", "pending")}
+
     """Get orders for this share"""
     if session.get("token") != token:
         raise HTTPException(status_code=403, detail="Access denied")

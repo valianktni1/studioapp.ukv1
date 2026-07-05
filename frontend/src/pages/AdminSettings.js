@@ -13,13 +13,17 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter
 } from "@/components/ui/dialog";
 import {
-  ArrowLeft, Key, Package, Plus, Pencil, Trash2, Printer, Eye, Check, Film, Shield, Copy, AlertTriangle, Mail, Send, FileText
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
+} from "@/components/ui/select";
+import {
+  ArrowLeft, Key, Package, Plus, Pencil, Trash2, Printer, Eye, Check, Film, Shield, Copy, AlertTriangle, Mail, Send, FileText, Truck, CreditCard
 } from "lucide-react";
 import {
   changePassword, getPrintSizes, createPrintSize, updatePrintSize, deletePrintSize,
   getPrintOrders, updateOrderStatus, getCompressionSetting, setCompressionSetting,
   get2FAStatus, setup2FA, enable2FA, disable2FA, getSMTPSettings, saveSMTPSettings, testSMTP,
-  getEmailTemplates, createEmailTemplate, updateEmailTemplate, deleteEmailTemplate
+  getEmailTemplates, createEmailTemplate, updateEmailTemplate, deleteEmailTemplate,
+  getPrintSettings, savePrintSettings
 } from "@/lib/api";
 
 export default function AdminSettings() {
@@ -77,6 +81,14 @@ export default function AdminSettings() {
   const [templateForm, setTemplateForm] = useState({ name: "", subject: "", body: "" });
   const [deleteTemplateTarget, setDeleteTemplateTarget] = useState(null);
 
+  // Delivery & Payments (PayPal)
+  const [printSettings, setPrintSettings] = useState({
+    shipping_cost: 2.50, minimum_order: 15.00, paypal_method: "none",
+    paypalme_handle: "", paypal_client_id: "", paypal_secret: "", paypal_mode: "live"
+  });
+  const [loadingPrintSettings, setLoadingPrintSettings] = useState(false);
+  const [savingPrintSettings, setSavingPrintSettings] = useState(false);
+
   useEffect(() => {
     if (activeTab === "print-sizes") loadPrintSizes();
     if (activeTab === "orders") loadOrders();
@@ -84,7 +96,31 @@ export default function AdminSettings() {
     if (activeTab === "2fa") load2FAStatus();
     if (activeTab === "email") loadSMTPSettings();
     if (activeTab === "templates") loadEmailTemplates();
+    if (activeTab === "delivery") loadPrintSettings();
   }, [activeTab]);
+
+  const loadPrintSettings = async () => {
+    setLoadingPrintSettings(true);
+    try {
+      const res = await getPrintSettings();
+      setPrintSettings(res.data);
+    } catch { /* ignore */ }
+    finally { setLoadingPrintSettings(false); }
+  };
+
+  const handleSavePrintSettings = async () => {
+    setSavingPrintSettings(true);
+    try {
+      await savePrintSettings({
+        ...printSettings,
+        shipping_cost: parseFloat(printSettings.shipping_cost) || 0,
+        minimum_order: parseFloat(printSettings.minimum_order) || 0,
+      });
+      toast.success("Delivery & payment settings saved");
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Failed to save");
+    } finally { setSavingPrintSettings(false); }
+  };
 
   const loadPrintSizes = async () => {
     setLoadingSizes(true);
@@ -397,6 +433,7 @@ export default function AdminSettings() {
             { id: "templates", label: "Email Templates", icon: FileText },
             { id: "video", label: "Video Compression", icon: Film },
             { id: "print-sizes", label: "Print Sizes & Prices", icon: Printer },
+            { id: "delivery", label: "Delivery & Payments", icon: CreditCard },
             { id: "orders", label: "Print Orders", icon: Package }
           ].map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)}
@@ -855,7 +892,7 @@ export default function AdminSettings() {
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
             <div className="flex items-center justify-between mb-6">
               <p className="text-sm text-[#57534E]" style={{ fontFamily: 'Manrope, sans-serif' }}>
-                Configure print sizes and prices for each finish type. Shipping: £2.50 (UK only)
+                Configure print sizes and prices for each finish type. Set delivery cost in the "Delivery & Payments" tab.
               </p>
               <Button onClick={openNewSize} data-testid="add-print-size-btn"
                 className="bg-[#1C1917] text-[#FDFCF8] rounded-sm px-4 py-2 text-xs tracking-wider uppercase font-bold gap-2">
@@ -907,6 +944,122 @@ export default function AdminSettings() {
                   </tbody>
                 </table>
               </div>
+            )}
+          </motion.div>
+        )}
+
+        {/* Delivery & Payments Tab */}
+        {activeTab === "delivery" && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="max-w-xl space-y-6">
+            {loadingPrintSettings ? (
+              <div className="flex justify-center py-12">
+                <div className="w-8 h-8 border-2 border-[#D4AF37] border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : (
+              <>
+                {/* Delivery */}
+                <div className="border rounded-sm p-6" style={{ borderColor: 'rgba(212,175,55,0.15)' }}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Truck className="w-5 h-5 text-[#D4AF37]" />
+                    <h3 className="text-lg font-medium" style={{ fontFamily: 'Cormorant Garamond, serif' }}>Delivery & Order Rules</h3>
+                  </div>
+                  <p className="text-sm text-[#57534E] mb-5" style={{ fontFamily: 'Manrope, sans-serif' }}>
+                    Set your own postage cost and minimum order for print purchases.
+                  </p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs tracking-[0.1em] uppercase font-semibold" style={{ color: '#57534E' }}>Delivery / Postage (£)</Label>
+                      <Input data-testid="delivery-cost" type="number" step="0.01" min="0" value={printSettings.shipping_cost}
+                        onChange={e => setPrintSettings(f => ({ ...f, shipping_cost: e.target.value }))}
+                        placeholder="2.50" className="border-[#D4D4D8] rounded-sm" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs tracking-[0.1em] uppercase font-semibold" style={{ color: '#57534E' }}>Minimum Order (£)</Label>
+                      <Input data-testid="minimum-order" type="number" step="0.01" min="0" value={printSettings.minimum_order}
+                        onChange={e => setPrintSettings(f => ({ ...f, minimum_order: e.target.value }))}
+                        placeholder="15.00" className="border-[#D4D4D8] rounded-sm" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* PayPal */}
+                <div className="border rounded-sm p-6" style={{ borderColor: 'rgba(212,175,55,0.15)' }}>
+                  <div className="flex items-center gap-2 mb-1">
+                    <CreditCard className="w-5 h-5 text-[#0070BA]" />
+                    <h3 className="text-lg font-medium" style={{ fontFamily: 'Cormorant Garamond, serif' }}>PayPal Payments</h3>
+                  </div>
+                  <p className="text-sm text-[#57534E] mb-5" style={{ fontFamily: 'Manrope, sans-serif' }}>
+                    Choose how couples pay for prints. Money goes directly to your PayPal account.
+                  </p>
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs tracking-[0.1em] uppercase font-semibold" style={{ color: '#57534E' }}>Payment Method</Label>
+                      <Select value={printSettings.paypal_method} onValueChange={v => setPrintSettings(f => ({ ...f, paypal_method: v }))}>
+                        <SelectTrigger data-testid="paypal-method" className="border-[#D4D4D8] rounded-sm">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Off — no online payment (you invoice manually)</SelectItem>
+                          <SelectItem value="paypalme">PayPal.me link (simple — just your handle)</SelectItem>
+                          <SelectItem value="api">Full PayPal Checkout (auto-confirmed)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {printSettings.paypal_method === "paypalme" && (
+                      <div className="space-y-1.5">
+                        <Label className="text-xs tracking-[0.1em] uppercase font-semibold" style={{ color: '#57534E' }}>Your PayPal.me Handle</Label>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-[#A8A29E]">paypal.me/</span>
+                          <Input data-testid="paypalme-handle" value={printSettings.paypalme_handle}
+                            onChange={e => setPrintSettings(f => ({ ...f, paypalme_handle: e.target.value }))}
+                            placeholder="yourstudio" className="border-[#D4D4D8] rounded-sm" />
+                        </div>
+                        <p className="text-[11px]" style={{ color: '#A8A29E' }}>
+                          Couples get a "Pay with PayPal" button for the exact total. You confirm receipt manually.
+                        </p>
+                      </div>
+                    )}
+
+                    {printSettings.paypal_method === "api" && (
+                      <>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs tracking-[0.1em] uppercase font-semibold" style={{ color: '#57534E' }}>PayPal Client ID</Label>
+                          <Input data-testid="paypal-client-id" value={printSettings.paypal_client_id}
+                            onChange={e => setPrintSettings(f => ({ ...f, paypal_client_id: e.target.value }))}
+                            placeholder="Live REST app Client ID" className="border-[#D4D4D8] rounded-sm font-mono text-xs" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs tracking-[0.1em] uppercase font-semibold" style={{ color: '#57534E' }}>PayPal Secret</Label>
+                          <Input data-testid="paypal-secret" type="password" value={printSettings.paypal_secret}
+                            onChange={e => setPrintSettings(f => ({ ...f, paypal_secret: e.target.value }))}
+                            placeholder="REST app Secret" className="border-[#D4D4D8] rounded-sm font-mono text-xs" />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs tracking-[0.1em] uppercase font-semibold" style={{ color: '#57534E' }}>Mode</Label>
+                          <Select value={printSettings.paypal_mode} onValueChange={v => setPrintSettings(f => ({ ...f, paypal_mode: v }))}>
+                            <SelectTrigger data-testid="paypal-mode" className="border-[#D4D4D8] rounded-sm">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="live">Live (real payments)</SelectItem>
+                              <SelectItem value="sandbox">Sandbox (testing)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="p-3 rounded-sm text-xs" style={{ backgroundColor: '#F5F2EB', color: '#57534E', fontFamily: 'Manrope, sans-serif' }}>
+                          Create a REST app at <strong>developer.paypal.com</strong> → My Apps &amp; Credentials → paste the Client ID + Secret here. Payments are captured and auto-marked as paid.
+                        </div>
+                      </>
+                    )}
+
+                    <Button onClick={handleSavePrintSettings} disabled={savingPrintSettings} data-testid="save-print-settings-btn"
+                      className="bg-[#1C1917] text-[#FDFCF8] rounded-sm px-6 py-2 text-xs tracking-wider uppercase font-bold">
+                      {savingPrintSettings ? "Saving..." : "Save Settings"}
+                    </Button>
+                  </div>
+                </div>
+              </>
             )}
           </motion.div>
         )}

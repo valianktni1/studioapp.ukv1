@@ -121,6 +121,8 @@ export const sendGalleryNotification = (id) => apiClient.post(`/admin/galleries/
 export const getSMTPSettings = () => apiClient.get('/admin/settings/smtp');
 export const saveSMTPSettings = (data) => apiClient.post('/admin/settings/smtp', data);
 export const testSMTP = () => apiClient.post('/admin/settings/smtp/test');
+export const getPrintSettings = () => apiClient.get('/admin/settings/print');
+export const savePrintSettings = (data) => apiClient.post('/admin/settings/print', data);
 
 // Admin Activity Log
 export const getAdminActivity = (limit = 50, galleryId = null, action = null, search = null) => {
@@ -291,6 +293,10 @@ export const createPrintOrder = (token, data) =>
   apiClient.post(`/share/${token}/print-order`, data);
 export const updatePrintOrderPaypal = (token, orderId, paypalOrderId, status = 'paid') =>
   apiClient.put(`/share/${token}/print-order/${orderId}/paypal?paypal_order_id=${paypalOrderId}&status=${status}`);
+export const paypalCreateOrder = (token, orderId) =>
+  apiClient.post(`/share/${token}/print-order/${orderId}/paypal/create-order`);
+export const paypalCaptureOrder = (token, orderId) =>
+  apiClient.post(`/share/${token}/print-order/${orderId}/paypal/capture`);
 export const getMyPrintOrders = (token) =>
   apiClient.get(`/share/${token}/print-orders`);
 
