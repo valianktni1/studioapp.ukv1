@@ -911,12 +911,20 @@ async def self_signup(data: SignupReq):
         raise HTTPException(status_code=400, detail="Username already in use")
     if data.plan not in PLANS:
         raise HTTPException(status_code=400, detail="Invalid plan")
-    tenant_id, slug = await _provision_tenant(business_name, username, data.password, data.plan, with_demo=True)
-    trial_ends = (datetime.now(timezone.utc) + timedelta(days=TRIAL_DAYS)).isoformat()
-    await control_db.tenants.update_one({"id": tenant_id}, {"$set": {"subscription_status": "trialing", "trial_ends_at": trial_ends}})
-    admin = await control_db.admins.find_one({"tenant_id": tenant_id})
-    token = create_jwt({"sub": admin["id"], "role": "admin", "username": username, "tenant_id": tenant_id})
-    return {"token": token, "username": username, "display_name": business_name, "trial_ends_at": trial_ends}
+    try:
+        tenant_id, slug = await _provision_tenant(business_name, username, data.password, data.plan, with_demo=True)
+        trial_ends = (datetime.now(timezone.utc) + timedelta(days=TRIAL_DAYS)).isoformat()
+        await control_db.tenants.update_one({"id": tenant_id}, {"$set": {"subscription_status": "trialing", "trial_ends_at": trial_ends}})
+        admin = await control_db.admins.find_one({"tenant_id": tenant_id})
+        if not admin:
+            raise RuntimeError("Account record was not created")
+        token = create_jwt({"sub": admin["id"], "role": "admin", "username": username, "tenant_id": tenant_id})
+        return {"token": token, "username": username, "display_name": business_name, "trial_ends_at": trial_ends}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"SIGNUP FAILED for username='{username}': {type(e).__name__}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Could not create account: {type(e).__name__}: {e}")
 
 
 
