@@ -3350,7 +3350,7 @@ async def notify_tenant_order_paid(order: dict):
 <p style='font-size:13px;color:#57534E;margin:0;'>Customer email: {order.get('customer_email','')}</p>
 <p style='font-size:13px;color:#A8A29E;margin:12px 0 0;'>Log in to your dashboard &rarr; Settings &rarr; Print Orders to fulfil this order.</p>
 """
-        html = build_branded_email(content, get_awards_url(smtp))
+        html = build_branded_email(content, get_awards_url(smtp), logo_url=await get_tenant_logo_email_url(smtp))
         subject = f"Print order paid \u2014 {order.get('gallery_name','')} (\u00a3{float(order.get('total',0)):.2f})"
         threading.Thread(target=send_smtp_email, args=(smtp, recipient, subject, html), daemon=True).start()
         logger.info(f"Order-paid email queued to {recipient} for order {ref}")
@@ -3387,7 +3387,7 @@ async def notify_client_order_receipt(order: dict):
 </table>
 <p style='font-size:12px;color:#A8A29E;margin:0;'>Keep this email as your receipt. If you have any questions, just reply to this message.</p>
 """
-        html = build_branded_email(content, get_awards_url(smtp))
+        html = build_branded_email(content, get_awards_url(smtp), logo_url=await get_tenant_logo_email_url(smtp))
         subject = f"Your print order receipt \u2014 {order.get('gallery_name','')} (\u00a3{float(order.get('total',0)):.2f})"
         threading.Thread(target=send_smtp_email, args=(smtp, customer_email, subject, html), daemon=True).start()
         logger.info(f"Client receipt email queued to {customer_email} for order {ref}")
@@ -4470,7 +4470,7 @@ def get_awards_url(smtp: dict) -> str:
         return f"{site_url}/api/public/email-assets/awards-badges.png"
     return ""
 
-def build_branded_email(content_html: str, awards_url: str = "", brand: str = "StudioApp") -> str:
+def build_branded_email(content_html: str, awards_url: str = "", brand: str = "StudioApp", logo_url: str = "") -> str:
     """Wrap content in the tenant-branded email template."""
     awards_section = ""
     if awards_url:
@@ -4479,6 +4479,10 @@ def build_branded_email(content_html: str, awards_url: str = "", brand: str = "S
 <p style="font-size:11px;color:#A8A29E;margin:0 0 12px 0;letter-spacing:1.5px;text-transform:uppercase;">Award-Winning Photography</p>
 <img src="{awards_url}" alt="Awards" style="max-width:480px;width:100%;height:auto;" />
 </td></tr>"""
+    footer_logo = ""
+    if logo_url:
+        footer_logo = f"""
+<img src="{logo_url}" alt="{brand}" style="max-height:44px;width:auto;margin:0 auto 14px;display:block;" />"""
     return f"""<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
@@ -4494,7 +4498,8 @@ def build_branded_email(content_html: str, awards_url: str = "", brand: str = "S
 <tr><td style="padding:40px;">
 {content_html}
 </td></tr>{awards_section}
-<tr><td style="background-color:#1C1917;padding:20px 40px;text-align:center;">
+<tr><td style="background-color:#1C1917;padding:24px 40px;text-align:center;">
+{footer_logo}
 <p style="color:#A8A29E;font-size:12px;margin:0;letter-spacing:1px;">
 {brand.upper()} &bull; CAPTURING YOUR STORY
 </p>
@@ -4504,6 +4509,25 @@ def build_branded_email(content_html: str, awards_url: str = "", brand: str = "S
 </table>
 </body>
 </html>"""
+
+async def get_tenant_logo_email_url(smtp: dict) -> str:
+    """Resolve the current tenant's logo to an absolute, email-safe URL (needs their site_url)."""
+    try:
+        tid = current_tenant_id()
+        if not tid:
+            return ""
+        tenant = await control_db.tenants.find_one({"id": tid}, {"_id": 0, "logo_url": 1})
+        logo = (tenant or {}).get("logo_url", "")
+        if not logo:
+            return ""
+        if logo.startswith("http://") or logo.startswith("https://"):
+            return logo
+        base = (smtp.get("site_url") or "").rstrip("/")
+        if not base:
+            return ""
+        return f"{base}{logo if logo.startswith('/') else '/' + logo}"
+    except Exception:
+        return ""
 
 # ─── Broadcast Email ───
 
@@ -4548,7 +4572,7 @@ async def send_broadcast_email(data: BroadcastEmailBody, admin=Depends(get_admin
         else:
             body_html += f'<p style="font-size:15px;color:#57534E;margin:0 0 12px 0;line-height:1.8;">{stripped}</p>\n'
 
-    html_content = build_branded_email(body_html, get_awards_url(smtp))
+    html_content = build_branded_email(body_html, get_awards_url(smtp), logo_url=await get_tenant_logo_email_url(smtp))
 
     sent = 0
     failed = []
@@ -4676,7 +4700,7 @@ async def send_template_email(gallery_id: str, data: SendTemplateEmailBody, admi
         else:
             body_html += f'<p style="font-size:15px;color:#57534E;margin:0 0 12px 0;line-height:1.8;">{stripped}</p>\n'
 
-    html_content = build_branded_email(body_html, get_awards_url(smtp))
+    html_content = build_branded_email(body_html, get_awards_url(smtp), logo_url=await get_tenant_logo_email_url(smtp))
 
     try:
         send_smtp_email(smtp, client_email, subject, html_content)
@@ -4706,6 +4730,7 @@ async def check_expiry_reminders():
     smtp = smtp_doc["value"]
     branding = await get_tenant_branding(current_tenant_id())
     business_name = branding.get("business_name") or smtp.get("sender_name") or "Your Photographer"
+    reminder_logo_url = await get_tenant_logo_email_url(smtp)
     now = datetime.now(timezone.utc)
     remind_start = now + timedelta(days=6)
     remind_end = now + timedelta(days=8)
@@ -4772,7 +4797,7 @@ Speak soon,<br><br>
 <strong>{business_name}</strong>
 </p>"""
 
-            html_body = build_branded_email(reminder_html, get_awards_url(smtp))
+            html_body = build_branded_email(reminder_html, get_awards_url(smtp), logo_url=reminder_logo_url)
             send_smtp_email(smtp, client_email, "Your Wedding Gallery Expires Soon", html_body)
 
             # Mark as sent so we don't send again
