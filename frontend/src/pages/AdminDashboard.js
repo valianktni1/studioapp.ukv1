@@ -15,7 +15,7 @@ import {
   Camera, Plus, LogOut, FolderOpen, Share2, Trash2, Search, Copy, Layout, X, Settings, ArrowUpDown, Eye, HardDrive, Download, Users, CheckCircle, Monitor, Smartphone, Tablet, Film, Heart, Image as ImageIcon, Mail, Send, Clock, AlertCircle, FolderHeart, Palette, Zap, HelpCircle
 } from "lucide-react";
 import {
-  listGalleries, createGallery, deleteGallery, getTemplates, createTemplate, deleteTemplate, thumbUrl, runBackup, getAllGalleriesStats, getLiveVisitors, getBroadcastPreview, sendBroadcastEmail, getDashboardStats, getBranding, brandingAssetUrl, getBilling
+  listGalleries, createGallery, deleteGallery, getTemplates, createTemplate, deleteTemplate, thumbUrl, getAllGalleriesStats, getLiveVisitors, getBroadcastPreview, sendBroadcastEmail, getDashboardStats, getBranding, brandingAssetUrl, getBilling
 } from "@/lib/api";
 
 export default function AdminDashboard() {
@@ -36,7 +36,6 @@ export default function AdminDashboard() {
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ folder_name: "", template_id: "", client_email: "" });
   const [newTemplate, setNewTemplate] = useState({ name: "", subfolders: "" });
-  const [backingUp, setBackingUp] = useState(false);
   const [liveVisitors, setLiveVisitors] = useState([]);
   const [dashStats, setDashStats] = useState({ active_galleries: 0, expiring_soon: 0, downloads_this_week: 0, pending_albums: 0, storage_used_bytes: 0 });
   const [showBroadcast, setShowBroadcast] = useState(false);
@@ -78,18 +77,6 @@ export default function AdminDashboard() {
     const interval = setInterval(fetchVisitors, 10000);
     return () => clearInterval(interval);
   }, []);
-
-  const handleBackup = async () => {
-    setBackingUp(true);
-    try {
-      const res = await runBackup();
-      toast.success(res.data.message);
-    } catch (err) {
-      toast.error(err.response?.data?.detail || "Backup failed");
-    } finally {
-      setBackingUp(false);
-    }
-  };
 
   const handleOpenBroadcast = async () => {
     setShowBroadcast(true);
@@ -204,35 +191,33 @@ export default function AdminDashboard() {
               ? <img src={brandingAssetUrl(branding.logo_url)} alt={branding.business_name} className="h-8 object-contain" data-testid="dash-logo" />
               : <span className="text-2xl font-medium tracking-tight" style={{ fontFamily: 'Cormorant Garamond, serif' }} data-testid="dash-logo">{branding.business_name || 'StudioApp'}</span>}
           </div>
-          <div className="flex items-center gap-2">
-            <Button data-testid="backup-btn" variant="ghost" onClick={handleBackup} disabled={backingUp} className="text-[#57534E] rounded-sm gap-2 text-xs tracking-wider">
-              <HardDrive className={`w-4 h-4 ${backingUp ? 'animate-pulse' : ''}`} /> {backingUp ? 'Backing up...' : 'Backup'}
+          <div className="flex items-center gap-1">
+            <Button data-testid="broadcast-email-btn" variant="ghost" onClick={handleOpenBroadcast} className="text-[#57534E] rounded-full gap-2 text-xs tracking-wider transition-colors hover:bg-[#EEF2FF] hover:text-[#4F46E5]">
+              <Mail className="w-4 h-4" style={{ color: '#6366F1' }} /> Broadcast
             </Button>
-            <Button data-testid="broadcast-email-btn" variant="ghost" onClick={handleOpenBroadcast} className="text-[#57534E] rounded-sm gap-2 text-xs tracking-wider">
-              <Mail className="w-4 h-4" /> Broadcast
+            <Button data-testid="manage-templates-btn" variant="ghost" onClick={() => setShowTemplates(true)} className="text-[#57534E] rounded-full gap-2 text-xs tracking-wider transition-colors hover:bg-[#ECFDF5] hover:text-[#059669]">
+              <Layout className="w-4 h-4" style={{ color: '#10B981' }} /> Templates
             </Button>
-            <Button data-testid="manage-templates-btn" variant="ghost" onClick={() => setShowTemplates(true)} className="text-[#57534E] rounded-sm gap-2 text-xs tracking-wider">
-              <Layout className="w-4 h-4" /> Templates
+            <Button data-testid="activity-btn" variant="ghost" onClick={() => navigate("/admin/activity")} className="text-[#57534E] rounded-full gap-2 text-xs tracking-wider transition-colors hover:bg-[#EFF6FF] hover:text-[#2563EB]">
+              <Eye className="w-4 h-4" style={{ color: '#3B82F6' }} /> Activity
             </Button>
-            <Button data-testid="activity-btn" variant="ghost" onClick={() => navigate("/admin/activity")} className="text-[#57534E] rounded-sm gap-2 text-xs tracking-wider">
-              <Eye className="w-4 h-4" /> Activity
+            <Button data-testid="plan-btn" variant="ghost" onClick={() => navigate("/admin/billing")} className="text-[#57534E] rounded-full gap-2 text-xs tracking-wider transition-colors hover:bg-[#FEF9E7] hover:text-[#B7791F]">
+              <Zap className="w-4 h-4" style={{ color: '#D4AF37' }} /> Plan
             </Button>
-            <Button data-testid="plan-btn" variant="ghost" onClick={() => navigate("/admin/billing")} className="text-[#57534E] rounded-sm gap-2 text-xs tracking-wider">
-              <Zap className="w-4 h-4" /> Plan
+            <Button data-testid="branding-btn" variant="ghost" onClick={() => navigate("/admin/branding")} className="text-[#57534E] rounded-full gap-2 text-xs tracking-wider transition-colors hover:bg-[#FDF2F8] hover:text-[#DB2777]">
+              <Palette className="w-4 h-4" style={{ color: '#EC4899' }} /> Branding
             </Button>
-            <Button data-testid="branding-btn" variant="ghost" onClick={() => navigate("/admin/branding")} className="text-[#57534E] rounded-sm gap-2 text-xs tracking-wider">
-              <Palette className="w-4 h-4" /> Branding
+            <Button data-testid="help-btn" variant="ghost" onClick={() => navigate("/admin/help")} className="text-[#57534E] rounded-full gap-2 text-xs tracking-wider transition-colors hover:bg-[#F0FDFA] hover:text-[#0D9488]">
+              <HelpCircle className="w-4 h-4" style={{ color: '#14B8A6' }} /> Help
             </Button>
-            <Button data-testid="help-btn" variant="ghost" onClick={() => navigate("/admin/help")} className="text-[#57534E] rounded-sm gap-2 text-xs tracking-wider">
-              <HelpCircle className="w-4 h-4" /> Help
+            <Button data-testid="settings-btn" variant="ghost" onClick={() => navigate("/admin/settings")} className="text-[#57534E] rounded-full gap-2 text-xs tracking-wider transition-colors hover:bg-[#F5F5F4] hover:text-[#1C1917]">
+              <Settings className="w-4 h-4" style={{ color: '#78716C' }} /> Settings
             </Button>
-            <Button data-testid="settings-btn" variant="ghost" onClick={() => navigate("/admin/settings")} className="text-[#57534E] rounded-sm gap-2 text-xs tracking-wider">
-              <Settings className="w-4 h-4" /> Settings
+            <div className="w-px h-6 mx-1.5" style={{ backgroundColor: 'rgba(212,175,55,0.25)' }} />
+            <Button data-testid="create-gallery-btn" onClick={() => setShowCreate(true)} className="rounded-full px-6 py-2 text-xs tracking-[0.15em] uppercase font-bold gap-2 text-[#FDFCF8] shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5" style={{ background: 'linear-gradient(135deg, #1C1917 0%, #44403C 100%)' }}>
+              <Plus className="w-4 h-4" style={{ color: '#D4AF37' }} /> New Gallery
             </Button>
-            <Button data-testid="create-gallery-btn" onClick={() => setShowCreate(true)} className="bg-[#1C1917] text-[#FDFCF8] hover:bg-[#1C1917]/90 rounded-sm px-6 py-2 text-xs tracking-[0.15em] uppercase font-bold gap-2">
-              <Plus className="w-4 h-4" /> New Gallery
-            </Button>
-            <Button data-testid="logout-btn" variant="ghost" onClick={() => { localStorage.removeItem("admin_token"); navigate("/admin"); }} className="text-[#57534E] rounded-sm px-3">
+            <Button data-testid="logout-btn" variant="ghost" onClick={() => { localStorage.removeItem("admin_token"); navigate("/admin"); }} className="text-[#57534E] rounded-full px-3 transition-colors hover:bg-[#FEF2F2] hover:text-[#DC2626]">
               <LogOut className="w-4 h-4" />
             </Button>
           </div>
