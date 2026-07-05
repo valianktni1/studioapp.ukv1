@@ -274,8 +274,9 @@ DEFAULT_BRANDING = {
 }
 
 async def ensure_super_admin():
-    existing = await control_db.super_admins.find_one({"username": SUPER_ADMIN_USERNAME})
+    # Env is the single source of truth: (re)set the super admin password on every startup.
     hashed = bcrypt.hashpw(SUPER_ADMIN_PASSWORD.encode(), bcrypt.gensalt()).decode()
+    existing = await control_db.super_admins.find_one({"username": SUPER_ADMIN_USERNAME})
     if not existing:
         await control_db.super_admins.insert_one({
             "id": str(uuid.uuid4()), "username": SUPER_ADMIN_USERNAME,
@@ -283,11 +284,9 @@ async def ensure_super_admin():
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
     else:
-        # Keep the env password as the source of truth (sync on every startup)
-        if not bcrypt.checkpw(SUPER_ADMIN_PASSWORD.encode(), existing["password"].encode()):
-            await control_db.super_admins.update_one(
-                {"username": SUPER_ADMIN_USERNAME}, {"$set": {"password": hashed}}
-            )
+        await control_db.super_admins.update_one(
+            {"username": SUPER_ADMIN_USERNAME}, {"$set": {"password": hashed}}
+        )
 
 async def get_super(authorization: str = Header(None)):
     if not authorization:

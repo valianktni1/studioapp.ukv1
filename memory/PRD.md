@@ -43,3 +43,10 @@ user "Mark"), tenants (photographers), and tenant customisation. Do NOT reinvent
 ## Notes
 - NO Emergent cloud object storage (breaks self-hosting). Logos + all media = local filesystem.
 - Deploy commands: see /app/memory/DEPLOYMENT.md (exact, user-provided).
+
+## CRITICAL DEPLOYMENT GOTCHAS (learned the hard way, 2026-06)
+1. **emergentintegrations MUST be installed in backend/Dockerfile** (it is NOT on PyPI, so `pip install -r requirements.txt` never gets it). server.py imports it at module top for Stripe -> without it the backend crash-loops with `ModuleNotFoundError: No module named 'emergentintegrations'` (shows as "?" in Dockge + 502 on /api). Dockerfile has: `RUN pip install --no-cache-dir emergentintegrations --extra-index-url https://d33sy5i8bnduwe.cloudfront.net/simple/`. Build host needs outbound internet to that index.
+2. **GPU transcode**: compose backend must pass the WHOLE dir `devices: - /dev/dri:/dev/dri` (single renderD128 node makes VAAPI fail -> CPU fallback). Diagnose with `docker exec <backend> vainfo`.
+3. **Smooth video playback over the net**: set backend env `NGINX_VIDEO_URL=1` (any value) to use the nginx-video container. Unset = jerky Python streaming. nginx video path is tenant-prefixed: `/uploads/{tenant_id}/{gallery}/{sub}/{file}` (fixed in generate_nginx_video_url).
+4. **Super admin password**: env is source of truth; ensure_super_admin() force-syncs SUPER_ADMIN_PASSWORD on every startup. Login at /super or /superadmin. Wrap the value in single quotes in YAML if it has special chars.
+5. Root `/` = photographer Sign In + "Create your studio" (-> /signup trial). Super admin at /super.

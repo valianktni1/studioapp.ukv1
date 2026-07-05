@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Camera, Lock, User, Eye, EyeOff } from "lucide-react";
-import { checkSetup, setupAdmin, loginAdmin } from "@/lib/api";
+import { setupAdmin, loginAdmin } from "@/lib/api";
 
 // Check if JWT token is expired
 function isTokenExpired(token) {
@@ -40,7 +40,8 @@ export default function AdminLogin() {
         return;
       }
     }
-    checkSetup().then(r => setNeedsSetup(!r.data.setup_complete)).catch(() => setNeedsSetup(true));
+    // SaaS: root is always the photographer sign-in. New studios use /signup.
+    setNeedsSetup(false);
   }, [navigate]);
 
   const handleSubmit = async (e) => {
@@ -266,6 +267,26 @@ export default function AdminLogin() {
             >
               {loading ? "Please wait..." : (needsSetup ? "Create Account" : "Sign In")}
             </Button>
+
+            {!needsSetup && (
+              <div className="pt-6 mt-2 border-t border-[#E7E5E4] text-center">
+                <p className="text-sm" style={{ color: '#57534E', fontFamily: 'Manrope, sans-serif' }}>
+                  New here?{" "}
+                  <button
+                    type="button"
+                    data-testid="go-to-signup-link"
+                    onClick={() => navigate("/signup")}
+                    className="font-semibold underline underline-offset-4 text-[#1C1917] hover:text-[#D4AF37]"
+                    style={{ transition: 'color 0.2s ease', fontFamily: 'Manrope, sans-serif' }}
+                  >
+                    Create your studio
+                  </button>
+                </p>
+                <p className="text-xs mt-1" style={{ color: '#A8A29E', fontFamily: 'Manrope, sans-serif' }}>
+                  Start your free trial in minutes
+                </p>
+              </div>
+            )}
               </>
             )}
           </form>
