@@ -22,7 +22,7 @@ import {
 import {
   ArrowLeft, Upload, Trash2, Copy, FolderOpen, Share2, QrCode,
   MoreVertical, Link, Lock, Globe, Image as ImageIcon, Film, Check,
-  Download, Plus, X, Heart, Calendar as CalendarIcon, Clock, Star, FileText, Mail, Send
+  Download, Plus, X, Heart, Calendar as CalendarIcon, Clock, Star, FileText, Mail, Send, Info
 } from "lucide-react";
 import {
   getGallery, uploadFiles, deleteFile, deleteSubfolder, copyToSubfolder, adminDownloadFile,
@@ -658,6 +658,16 @@ export default function AdminGalleryDetail() {
 
           {gallery.subfolders.map(sf => (
             <TabsContent key={sf} value={sf} className="mt-0">
+              {/* Video optimisation explainer */}
+              <div className="mb-4 flex gap-3 rounded-lg border p-4" style={{ borderColor: 'rgba(212,175,55,0.35)', backgroundColor: 'rgba(212,175,55,0.06)' }} data-testid="video-optimise-note">
+                <Info className="w-5 h-5 shrink-0 mt-0.5" style={{ color: '#B8860B' }} />
+                <div style={{ fontFamily: 'Manrope, sans-serif' }}>
+                  <p className="text-sm font-semibold" style={{ color: '#1C1917' }}>About video "optimising"</p>
+                  <p className="text-sm mt-1 leading-relaxed" style={{ color: '#57534E' }}>
+                    When you upload a video we create a lightweight, web-friendly copy so it <strong>streams smoothly online</strong> for your clients on any device. This is only used for in-gallery playback — <strong>your original file is never altered</strong>. When a client downloads the video they always receive the <strong>full-resolution original</strong> you uploaded.
+                  </p>
+                </div>
+              </div>
               {/* Upload Zone */}
               <div
                 className={`upload-zone mb-4 p-6 flex flex-col items-center justify-center text-center cursor-pointer ${dragOver ? 'drag-over' : ''}`}
