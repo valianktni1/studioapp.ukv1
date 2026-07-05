@@ -137,7 +137,7 @@ export default function AdminLogin() {
         >
           <div className="flex items-center gap-3 mb-16">
             <img src="/studioapp-logo.png" alt="StudioApp" data-testid="login-logo"
-              className="h-14 w-auto rounded-lg" style={{ backgroundColor: '#000' }} />
+              className="h-14 w-auto" />
           </div>
 
           <h2
