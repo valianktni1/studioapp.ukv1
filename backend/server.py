@@ -4879,6 +4879,26 @@ async def expiry_reminder_loop():
         await asyncio.sleep(86400)
 
 @app.on_event("startup")
+async def startup_fix_indexes():
+    """Self-heal: drop stale unique indexes that block multi-tenant signup.
+    A legacy unique index on admins.email (email_1) rejects every account after the
+    first because new admins have email=null. Drop such non-essential unique indexes."""
+    for coll_name in ("admins", "tenants"):
+        try:
+            coll = control_db[coll_name]
+            indexes = await coll.index_information()
+            for name, spec in indexes.items():
+                if name == "_id_":
+                    continue
+                keys = [k for k, _ in spec.get("key", [])]
+                # Only touch unique indexes on a single optional field (email/contact_email/etc.)
+                if spec.get("unique") and keys and keys[0] in ("email", "contact_email") and not spec.get("sparse"):
+                    await coll.drop_index(name)
+                    logger.warning(f"Dropped stale unique index '{name}' on {coll_name} (blocked signup with null {keys[0]})")
+        except Exception as e:
+            logger.warning(f"Index cleanup on {coll_name} failed: {e}")
+
+@app.on_event("startup")
 async def startup_auto_archive():
     """Seed super admin, archive old logs, and start the daily expiry loop."""
     try:
