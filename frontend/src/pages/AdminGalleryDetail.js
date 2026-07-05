@@ -1153,19 +1153,6 @@ export default function AdminGalleryDetail() {
               Are you sure you want to delete <strong>{fileDeleteConfirm.filename}</strong>?
             </DialogDescription>
           </DialogHeader>
-          <div className="mt-2">
-            <label className="flex items-start gap-3 p-3 rounded-sm border cursor-pointer hover:bg-amber-50/50 transition-colors" style={{ borderColor: '#E8E4DC' }}>
-              <input data-testid="delete-file-backup-checkbox" type="checkbox" checked={fileDeleteConfirm.deleteBackup}
-                onChange={e => setFileDeleteConfirm(d => ({...d, deleteBackup: e.target.checked}))}
-                className="mt-0.5 w-4 h-4 rounded accent-[#D4AF37]" />
-              <div>
-                <span className="text-sm font-semibold" style={{ color: '#1C1917', fontFamily: 'Manrope, sans-serif' }}>Also delete from backup</span>
-                <p className="text-xs mt-0.5" style={{ color: '#A8A29E', fontFamily: 'Manrope, sans-serif' }}>
-                  Removes the backup copy too, freeing up storage space
-                </p>
-              </div>
-            </label>
-          </div>
           <DialogFooter className="mt-4 flex gap-2">
             <Button variant="outline" onClick={() => setFileDeleteConfirm({ open: false, fileId: null, filename: "", deleteBackup: false, isBulk: false })}
               className="flex-1 rounded-sm border-[#D4D4D8] text-xs tracking-wider">
@@ -1173,7 +1160,7 @@ export default function AdminGalleryDetail() {
             </Button>
             <Button data-testid="confirm-delete-file" onClick={confirmFileDelete}
               className="flex-1 bg-[#9F1239] text-white hover:bg-[#9F1239]/90 rounded-sm text-xs tracking-wider">
-              <Trash2 className="w-3.5 h-3.5 mr-1.5" /> Delete{fileDeleteConfirm.deleteBackup ? " + Backup" : ""}
+              <Trash2 className="w-3.5 h-3.5 mr-1.5" /> Delete
             </Button>
           </DialogFooter>
         </DialogContent>
