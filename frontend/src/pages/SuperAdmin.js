@@ -12,12 +12,17 @@ import {
 } from "@/components/ui/select";
 import {
   Building2, Plus, Trash2, Power, LogOut, Users, Layers, LayoutDashboard,
-  CreditCard, Mail, Send, TrendingUp, Clock, CheckCircle2, Loader2
+  CreditCard, Mail, Send, TrendingUp, Clock, CheckCircle2, Loader2,
+  Infinity as InfinityIcon, FileText, Pencil, X, CalendarPlus
 } from "lucide-react";
 import {
   superLogin, superListTenants, superCreateTenant, superSetStatus, superSetPlan, superDeleteTenant, getErrorMessage,
   superOverview, superPayments, superGetEmail, superSaveEmail, superTestEmail, superBroadcastRecipients, superBroadcast,
+  superExtendTrial, superEmailTenant, superListTemplates, superCreateTemplate, superUpdateTemplate, superDeleteTemplate,
 } from "@/lib/api";
+
+const FOREVER_DATE = "9999-12-31T23:59:59+00:00";
+const isForever = (t) => t.trial_forever || t.trial_ends_at === FOREVER_DATE;
 
 const PLAN_LABELS = { starter: "Starter · 10 · £15", pro: "Professional · 30 · £35", studio: "Studio · 60 · £65" };
 const gbp = (n) => "£" + Number(n || 0).toLocaleString("en-GB", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -31,6 +36,8 @@ export default function SuperAdmin() {
   const [loading, setLoading] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ business_name: "", username: "", password: "", plan: "starter" });
+  const [extendFor, setExtendFor] = useState(null);
+  const [emailFor, setEmailFor] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -154,12 +161,14 @@ export default function SuperAdmin() {
                           {t.status === "suspended" ? "suspended" : "active"}
                         </span>
                         <span className="text-xs px-2 py-0.5 rounded" style={{ background: "rgba(212,175,55,0.12)", color: "#D4AF37" }}>
-                          {t.subscription_status || "trialing"}
+                          {isForever(t) ? "lifetime" : (t.subscription_status || "trialing")}
                         </span>
                       </div>
                       <div className="text-xs mt-1" style={{ color: "#71717A" }}>
                         @{t.admin_username || "—"} · /s/{t.subdomain}/… · {t.gallery_count || 0} galleries
-                        {t.trial_ends_at && (t.subscription_status || "trialing") === "trialing" ? ` · trial ends ${fmtDate(t.trial_ends_at)}` : ""}
+                        {isForever(t)
+                          ? " · lifetime access"
+                          : (t.trial_ends_at && (t.subscription_status || "trialing") === "trialing" ? ` · trial ends ${fmtDate(t.trial_ends_at)}` : "")}
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
@@ -173,6 +182,8 @@ export default function SuperAdmin() {
                           <SelectItem value="studio">{PLAN_LABELS.studio}</SelectItem>
                         </SelectContent>
                       </Select>
+                      <Button data-testid={`tenant-extend-${t.id}`} variant="ghost" size="sm" onClick={() => setExtendFor(t)} className="text-white/70" title="Extend trial"><CalendarPlus className="w-4 h-4" /></Button>
+                      <Button data-testid={`tenant-email-${t.id}`} variant="ghost" size="sm" onClick={() => setEmailFor(t)} className="text-white/70" title="Email photographer"><Mail className="w-4 h-4" /></Button>
                       <Button data-testid={`tenant-toggle-${t.id}`} variant="ghost" size="sm" onClick={() => toggleStatus(t)} className="text-white/70"><Power className="w-4 h-4" /></Button>
                       <Button data-testid={`tenant-delete-${t.id}`} variant="ghost" size="sm" onClick={() => remove(t)}><Trash2 className="w-4 h-4" style={{ color: "#f87171" }} /></Button>
                     </div>
@@ -207,6 +218,9 @@ export default function SuperAdmin() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {extendFor && <ExtendTrialDialog tenant={extendFor} onClose={() => setExtendFor(null)} onDone={load} />}
+      {emailFor && <TenantEmailDialog tenant={emailFor} onClose={() => setEmailFor(null)} />}
     </div>
   );
 }
@@ -299,10 +313,13 @@ function EmailTab() {
   const [savingSmtp, setSavingSmtp] = useState(false);
   const [testing, setTesting] = useState(false);
   const [sending, setSending] = useState(false);
+  const [templates, setTemplates] = useState([]);
 
+  const loadTemplates = () => superListTemplates().then(r => setTemplates(r.data)).catch(() => {});
   useEffect(() => {
     superGetEmail().then(r => setSmtp(r.data)).catch(e => toast.error(getErrorMessage(e)));
     superBroadcastRecipients().then(r => setRecips(r.data)).catch(() => {});
+    loadTemplates();
   }, []);
 
   const saveSmtp = async () => {
@@ -333,7 +350,8 @@ function EmailTab() {
   const inp = "bg-transparent border-white/15 text-white";
 
   return (
-    <div className="grid md:grid-cols-2 gap-8" data-testid="email-tab">
+    <div data-testid="email-tab">
+      <div className="grid md:grid-cols-2 gap-8">
       <div>
         <h2 className="text-sm uppercase tracking-widest mb-4" style={{ color: "#A1A1AA" }}>Platform email account (SMTP)</h2>
         <div className="space-y-3">
@@ -367,6 +385,15 @@ function EmailTab() {
           <Users className="w-4 h-4 inline mr-2" /> {recips.count} photographer(s) will receive this
         </div>
         <div className="space-y-3">
+          {templates.length > 0 && (
+            <div>
+              <Label className="text-xs" style={{ color: "#A1A1AA" }}>Load a template (optional)</Label>
+              <Select onValueChange={(id) => { const tp = templates.find(x => x.id === id); if (tp) setMsg({ subject: tp.subject, body: tp.body }); }}>
+                <SelectTrigger data-testid="broadcast-template-picker" className="bg-transparent border-white/15 text-white text-sm"><SelectValue placeholder="Choose a saved template…" /></SelectTrigger>
+                <SelectContent>{templates.map(tp => <SelectItem key={tp.id} value={tp.id}>{tp.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          )}
           <div><Label className="text-xs" style={{ color: "#A1A1AA" }}>Subject</Label>
             <Input data-testid="broadcast-subject" className={inp} value={msg.subject} onChange={e => setMsg({ ...msg, subject: e.target.value })} placeholder="e.g. New feature: bulk uploads" /></div>
           <div><Label className="text-xs" style={{ color: "#A1A1AA" }}>Message</Label>
@@ -376,6 +403,139 @@ function EmailTab() {
           </Button>
         </div>
       </div>
+      </div>
+      <TemplatesManager templates={templates} reload={loadTemplates} />
     </div>
+  );
+}
+
+
+function TemplatesManager({ templates, reload }) {
+  const [editing, setEditing] = useState(null); // {id?, name, subject, body}
+  const inp = "bg-transparent border-white/15 text-white";
+  const save = async () => {
+    if (!editing.name.trim()) return toast.error("Template name is required");
+    try {
+      if (editing.id) await superUpdateTemplate(editing.id, editing);
+      else await superCreateTemplate(editing);
+      toast.success("Template saved");
+      setEditing(null); reload();
+    } catch (e) { toast.error(getErrorMessage(e)); }
+  };
+  const del = async (t) => {
+    if (!window.confirm(`Delete template "${t.name}"?`)) return;
+    try { await superDeleteTemplate(t.id); toast.success("Template deleted"); reload(); }
+    catch (e) { toast.error(getErrorMessage(e)); }
+  };
+  return (
+    <div className="mt-12 pt-8 border-t border-white/10" data-testid="templates-manager">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm uppercase tracking-widest flex items-center gap-2" style={{ color: "#A1A1AA" }}><FileText className="w-4 h-4" /> Email templates</h2>
+        <Button data-testid="new-template-btn" onClick={() => setEditing({ name: "", subject: "", body: "" })} className="rounded-sm gap-2 text-xs uppercase tracking-wider font-bold" style={{ background: "#D4AF37", color: "#0B0B0F" }}><Plus className="w-4 h-4" /> New template</Button>
+      </div>
+      {templates.length === 0 ? (
+        <p className="text-white/40 text-sm">No templates yet. Save one to reuse for broadcasts or single sends.</p>
+      ) : (
+        <div className="grid sm:grid-cols-2 gap-3" data-testid="templates-list">
+          {templates.map(t => (
+            <div key={t.id} className="rounded-lg border border-white/10 p-4 flex items-start justify-between gap-3" style={{ background: "rgba(255,255,255,0.02)" }}>
+              <div className="min-w-0">
+                <div className="font-medium truncate">{t.name}</div>
+                <div className="text-xs mt-0.5 truncate" style={{ color: "#71717A" }}>{t.subject || "(no subject)"}</div>
+              </div>
+              <div className="flex gap-1 shrink-0">
+                <Button variant="ghost" size="sm" onClick={() => setEditing(t)} className="text-white/70"><Pencil className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="sm" onClick={() => del(t)}><Trash2 className="w-4 h-4" style={{ color: "#f87171" }} /></Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent data-testid="template-dialog">
+          <DialogHeader><DialogTitle>{editing?.id ? "Edit template" : "New template"}</DialogTitle></DialogHeader>
+          {editing && (
+            <div className="space-y-3">
+              <div><Label>Template name</Label><Input data-testid="tpl-name" value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })} placeholder="e.g. Trial ending reminder" /></div>
+              <div><Label>Subject</Label><Input data-testid="tpl-subject" value={editing.subject} onChange={e => setEditing({ ...editing, subject: e.target.value })} /></div>
+              <div><Label>Message</Label><Textarea data-testid="tpl-body" rows={7} value={editing.body} onChange={e => setEditing({ ...editing, body: e.target.value })} /></div>
+            </div>
+          )}
+          <DialogFooter><Button data-testid="tpl-save" onClick={save}>Save template</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function ExtendTrialDialog({ tenant, onClose, onDone }) {
+  const [days, setDays] = useState(30);
+  const [busy, setBusy] = useState(false);
+  const submit = async (forever) => {
+    setBusy(true);
+    try {
+      await superExtendTrial(tenant.id, forever ? { forever: true } : { days: parseInt(days) || 0 });
+      toast.success(forever ? `${tenant.business_name} set to lifetime access` : `Trial extended by ${days} days`);
+      onClose(); onDone && onDone();
+    } catch (e) { toast.error(getErrorMessage(e)); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent data-testid="extend-trial-dialog">
+        <DialogHeader><DialogTitle>Extend trial — {tenant.business_name}</DialogTitle></DialogHeader>
+        <div className="space-y-4">
+          <div>
+            <Label>Extend by (days)</Label>
+            <Input data-testid="extend-days-input" type="number" min="1" value={days} onChange={e => setDays(e.target.value)} />
+            <p className="text-xs mt-1 text-muted-foreground">Adds to their current trial end if it's still active.</p>
+          </div>
+          <div className="flex gap-2">
+            <Button data-testid="extend-days-btn" onClick={() => submit(false)} disabled={busy} className="flex-1 gap-2"><CalendarPlus className="w-4 h-4" /> Extend {days} days</Button>
+            <Button data-testid="extend-forever-btn" onClick={() => submit(true)} disabled={busy} variant="outline" className="flex-1 gap-2"><InfinityIcon className="w-4 h-4" /> Lifetime (never expires)</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function TenantEmailDialog({ tenant, onClose }) {
+  const [msg, setMsg] = useState({ subject: "", body: "" });
+  const [templates, setTemplates] = useState([]);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { superListTemplates().then(r => setTemplates(r.data)).catch(() => {}); }, []);
+  const send = async () => {
+    if (!msg.subject.trim() || !msg.body.trim()) return toast.error("Subject and message are required");
+    setBusy(true);
+    try {
+      const r = await superEmailTenant(tenant.id, msg);
+      toast.success(`Sent to ${r.data.sent_to}`);
+      onClose();
+    } catch (e) { toast.error(getErrorMessage(e)); }
+    finally { setBusy(false); }
+  };
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent data-testid="tenant-email-dialog">
+        <DialogHeader><DialogTitle>Email {tenant.business_name}</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          {templates.length > 0 && (
+            <div>
+              <Label>Load a template (optional)</Label>
+              <Select onValueChange={(id) => { const tp = templates.find(x => x.id === id); if (tp) setMsg({ subject: tp.subject, body: tp.body }); }}>
+                <SelectTrigger data-testid="tenant-email-template-picker"><SelectValue placeholder="Choose a saved template…" /></SelectTrigger>
+                <SelectContent>{templates.map(tp => <SelectItem key={tp.id} value={tp.id}>{tp.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          )}
+          <div><Label>Subject</Label><Input data-testid="tenant-email-subject" value={msg.subject} onChange={e => setMsg({ ...msg, subject: e.target.value })} /></div>
+          <div><Label>Message</Label><Textarea data-testid="tenant-email-body" rows={7} value={msg.body} onChange={e => setMsg({ ...msg, body: e.target.value })} /></div>
+        </div>
+        <DialogFooter>
+          <Button data-testid="tenant-email-send" onClick={send} disabled={busy} className="gap-2">{busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <><Send className="w-4 h-4" /> Send</>}</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

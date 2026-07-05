@@ -70,6 +70,12 @@ export const superSaveEmail = (data) => apiClient.post('/super/email-settings', 
 export const superTestEmail = () => apiClient.post('/super/email-settings/test');
 export const superBroadcastRecipients = () => apiClient.get('/super/broadcast/recipients');
 export const superBroadcast = (data) => apiClient.post('/super/broadcast', data);
+export const superExtendTrial = (id, data) => apiClient.post(`/super/tenants/${id}/extend-trial`, data);
+export const superEmailTenant = (id, data) => apiClient.post(`/super/tenants/${id}/email`, data);
+export const superListTemplates = () => apiClient.get('/super/email-templates');
+export const superCreateTemplate = (data) => apiClient.post('/super/email-templates', data);
+export const superUpdateTemplate = (id, data) => apiClient.put(`/super/email-templates/${id}`, data);
+export const superDeleteTemplate = (id) => apiClient.delete(`/super/email-templates/${id}`);
 
 // Tenant branding
 export const getBranding = () => apiClient.get('/admin/branding');

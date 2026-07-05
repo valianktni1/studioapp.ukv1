@@ -1,0 +1,38 @@
+{
+  "summary": "Frontend-only regression + new features test for Super Admin panel: Extend Trial (custom days + Lifetime), Single Photographer Email dialog, and Reusable Email Templates manager. All new flows work end-to-end and no existing feature regressed. Backend was not tested per instructions (already verified by main agent).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verified_flows": [
+    "Super admin login at /super (superadmin / Stu!d10App_2026xQ) succeeds, StudioApp logo renders.",
+    "Tabs render: super-tab-overview, super-tab-photographers, super-tab-payments, super-tab-email. Tab content divs overview-tab / payments-tab / email-tab load on click.",
+    "Photographers list shows tenant-extend-<id>, tenant-email-<id>, tenant-toggle-<id>, tenant-delete-<id>, tenant-plan-<id> buttons for each row.",
+    "Extend Trial: entering 45 in extend-days-input and clicking extend-days-btn updates the tenant meta line to 'trial ends 19 Aug 2026' and shows success toast.",
+    "Extend Forever: clicking extend-forever-btn switches the tenant status badge to 'lifetime' and meta line to 'lifetime access'; success toast shown.",
+    "Tenant Email dialog opens from tenant-email-<id>; template picker (visible + functional in dialog UI), subject, body, send all render. Clicking Send fires POST and returns an SMTP error toast (dummy SMTP configured with smtp.test.com) - UI wiring OK.",
+    "Email tab: Templates Manager renders below SMTP + Broadcast. new-template-btn opens template-dialog with tpl-name/tpl-subject/tpl-body/tpl-save. Create adds it to templates-list. Edit (pencil) opens dialog with prefilled fields and saves. Delete (trash + confirm) removes it and shows 'Template deleted' toast.",
+    "Broadcast template picker: choosing 'Welcome' fills broadcast-subject with 'Welcome to StudioApp' and broadcast-body with 'Hi there!'.",
+    "Regression: Overview stats load (2 photographers, MRR £0, 2 galleries), Payments tab loads, New Photographer button appears on Photographers tab, plan select / power toggle / delete buttons still present, super-admin logout works."
+  ],
+  "notes": [
+    "SMTP toast reads 'SMTP error: [Errno -5] No address associated with hostname' rather than 'Platform email not configured' because sandbox has dummy SMTP config saved (smtp.test.com). This still validates that Send fires and errors are surfaced. Not a regression.",
+    "'mark' tenant is now set to lifetime as a side-effect of testing extend-forever. Both tenants (Rose, Mark) are now in 'lifetime' state. Main agent may want to reset Mark to trialing if needed for future demos.",
+    "super-new-tenant-btn is intentionally only rendered while the Photographers tab is active (conditional on tab === 'photographers'); this is by design."
+  ],
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "TenantEmailDialog toast for missing SMTP relies on backend detail message; consider standardising error copy so admins see consistent 'Platform email not configured' regardless of whether SMTP is unset vs unreachable.",
+    "SuperAdmin.js is 542 lines and hosts login + dashboard + 5 dialog/tab components; consider splitting into per-component files for maintainability."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested", "frontend": "100%"},
+  "test_credentials": "superadmin / Stu!d10App_2026xQ (super), mark / Test!2026 (tenant)",
+  "seed_data_creation": "Created + deleted TEST_Template_PW email template as part of CRUD verification. Extended Weddings By Mark first by 45 days then to lifetime.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Both tenants now in lifetime state; extend-trial custom-days flow will still work but the badge change from trialing->lifetime cannot be re-observed without seeding a new trialing tenant. Broadcast template picker uses shadcn Select — click SelectTrigger then click role='option'."
+}

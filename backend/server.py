@@ -441,6 +441,114 @@ async def super_delete_tenant(tenant_id: str, _super=Depends(get_super)):
         shutil.rmtree(tenant_files, ignore_errors=True)
     return {"success": True}
 
+FOREVER_DATE = "9999-12-31T23:59:59+00:00"
+
+class ExtendTrialReq(BaseModel):
+    days: Optional[int] = None
+    forever: bool = False
+
+@api_router.post("/super/tenants/{tenant_id}/extend-trial")
+async def super_extend_trial(tenant_id: str, data: ExtendTrialReq, _super=Depends(get_super)):
+    t = await control_db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    now = datetime.now(timezone.utc)
+    if data.forever:
+        upd = {"trial_ends_at": FOREVER_DATE, "trial_forever": True, "subscription_status": "trialing"}
+        new_end = FOREVER_DATE
+    else:
+        days = int(data.days or 0)
+        if days <= 0:
+            raise HTTPException(status_code=400, detail="Enter a number of days greater than 0")
+        base = now
+        cur = t.get("trial_ends_at")
+        if cur and cur != FOREVER_DATE:
+            try:
+                cd = datetime.fromisoformat(cur)
+                if cd.tzinfo is None:
+                    cd = cd.replace(tzinfo=timezone.utc)
+                if cd > now:
+                    base = cd
+            except (ValueError, TypeError):
+                pass
+        new_end = (base + timedelta(days=days)).isoformat()
+        upd = {"trial_ends_at": new_end, "trial_forever": False, "subscription_status": "trialing"}
+    await control_db.tenants.update_one({"id": tenant_id}, {"$set": upd})
+    return {"success": True, "trial_ends_at": new_end, "forever": data.forever}
+
+def _body_to_html(body: str) -> str:
+    out = ""
+    for line in body.strip().split("\n"):
+        s = line.strip()
+        out += "<br>" if not s else f'<p style="font-size:15px;color:#57534E;margin:0 0 12px 0;line-height:1.8;">{s}</p>\n'
+    return build_branded_email(out)
+
+async def _resolve_tenant_email(t: dict) -> str:
+    email = (t.get("contact_email") or "").strip()
+    if not email:
+        a = await control_db.admins.find_one({"tenant_id": t["id"]}, {"_id": 0, "username": 1})
+        u = (a or {}).get("username", "") or ""
+        if "@" in u:
+            email = u.strip()
+    return email
+
+class SingleEmailReq(BaseModel):
+    subject: str
+    body: str
+
+@api_router.post("/super/tenants/{tenant_id}/email")
+async def super_email_tenant(tenant_id: str, data: SingleEmailReq, _super=Depends(get_super)):
+    if not data.subject.strip() or not data.body.strip():
+        raise HTTPException(status_code=400, detail="Subject and message are required")
+    t = await control_db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+    if not t:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    doc = await control_db.settings.find_one({"key": "platform_smtp"}, {"_id": 0})
+    if not doc or not doc.get("value", {}).get("smtp_email"):
+        raise HTTPException(status_code=400, detail="Platform email not configured. Set it up in the Email tab first.")
+    email = await _resolve_tenant_email(t)
+    if not email:
+        raise HTTPException(status_code=400, detail="This photographer has no email address on file")
+    try:
+        send_smtp_email(doc["value"], email, data.subject.strip(), _body_to_html(data.body))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"SMTP error: {str(e)}")
+    return {"success": True, "sent_to": email}
+
+# ─── Super Admin: reusable email templates ───
+class EmailTemplateReq(BaseModel):
+    name: str
+    subject: str
+    body: str
+
+@api_router.get("/super/email-templates")
+async def super_list_templates(_super=Depends(get_super)):
+    return await control_db.email_templates.find({}, {"_id": 0}).sort("name", 1).to_list(500)
+
+@api_router.post("/super/email-templates")
+async def super_create_template(data: EmailTemplateReq, _super=Depends(get_super)):
+    if not data.name.strip():
+        raise HTTPException(status_code=400, detail="Template name is required")
+    tpl = {"id": str(uuid.uuid4()), "name": data.name.strip(), "subject": data.subject, "body": data.body,
+           "created_at": datetime.now(timezone.utc).isoformat()}
+    await control_db.email_templates.insert_one(tpl)
+    tpl.pop("_id", None)
+    return tpl
+
+@api_router.put("/super/email-templates/{tpl_id}")
+async def super_update_template(tpl_id: str, data: EmailTemplateReq, _super=Depends(get_super)):
+    r = await control_db.email_templates.update_one(
+        {"id": tpl_id}, {"$set": {"name": data.name.strip(), "subject": data.subject, "body": data.body}})
+    if r.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return {"success": True}
+
+@api_router.delete("/super/email-templates/{tpl_id}")
+async def super_delete_template(tpl_id: str, _super=Depends(get_super)):
+    await control_db.email_templates.delete_one({"id": tpl_id})
+    return {"success": True}
+
+
 # ─── Super Admin: platform overview / stats ───
 @api_router.get("/super/overview")
 async def super_overview(_super=Depends(get_super)):
