@@ -12,7 +12,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select";
 import {
-  Camera, Plus, LogOut, FolderOpen, Share2, Trash2, Search, Copy, Layout, X, Settings, ArrowUpDown, Eye, HardDrive, Download, Users, CheckCircle, Monitor, Smartphone, Tablet, Film, Heart, Image as ImageIcon, Mail, Send, Clock, AlertCircle, FolderHeart, Palette, Zap, HelpCircle
+  Camera, Plus, LogOut, FolderOpen, Share2, Trash2, Search, Copy, Layout, X, Settings, ArrowUpDown, Eye, HardDrive, Download, Users, CheckCircle, Monitor, Smartphone, Tablet, Film, Heart, Image as ImageIcon, Mail, Send, Clock, AlertCircle, FolderHeart, Palette, Zap, HelpCircle, Menu
 } from "lucide-react";
 import {
   listGalleries, createGallery, deleteGallery, getTemplates, createTemplate, deleteTemplate, thumbUrl, getAllGalleriesStats, getLiveVisitors, getBroadcastPreview, sendBroadcastEmail, getDashboardStats, getBranding, brandingAssetUrl, getBilling
@@ -44,6 +44,7 @@ export default function AdminDashboard() {
   const [sendingBroadcast, setSendingBroadcast] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, id: null, name: "", deleteBackup: false });
   const [upgradeDialog, setUpgradeDialog] = useState({ open: false, message: "" });
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -197,7 +198,7 @@ export default function AdminDashboard() {
               ? <img src={brandingAssetUrl(branding.logo_url)} alt={branding.business_name} className="h-8 object-contain" data-testid="dash-logo" />
               : <span className="text-2xl font-medium tracking-tight" style={{ fontFamily: 'Cormorant Garamond, serif' }} data-testid="dash-logo">{branding.business_name || 'StudioApp'}</span>}
           </div>
-          <div className="flex items-center gap-1">
+          <div className="hidden md:flex items-center gap-1">
             <Button data-testid="broadcast-email-btn" variant="ghost" onClick={handleOpenBroadcast} className="text-[#57534E] rounded-full gap-2 text-xs tracking-wider transition-colors hover:bg-[#EEF2FF] hover:text-[#4F46E5]">
               <Mail className="w-4 h-4" style={{ color: '#6366F1' }} /> Broadcast
             </Button>
@@ -227,7 +228,41 @@ export default function AdminDashboard() {
               <LogOut className="w-4 h-4" />
             </Button>
           </div>
+
+          {/* Mobile: New Gallery + hamburger */}
+          <div className="flex md:hidden items-center gap-2">
+            <Button data-testid="create-gallery-btn-mobile" onClick={() => setShowCreate(true)} className="rounded-full px-4 py-2 text-xs tracking-wider uppercase font-bold gap-1.5 text-[#FDFCF8]" style={{ background: 'linear-gradient(135deg, #1C1917 0%, #44403C 100%)' }}>
+              <Plus className="w-4 h-4" style={{ color: '#D4AF37' }} /> New
+            </Button>
+            <Button data-testid="mobile-menu-btn" variant="ghost" onClick={() => setMobileMenuOpen(o => !o)} className="text-[#1C1917] rounded-full px-3">
+              {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </Button>
+          </div>
         </div>
+
+        {/* Mobile dropdown menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t px-4 py-2" style={{ borderColor: 'rgba(212,175,55,0.15)', backgroundColor: '#FDFCF8' }} data-testid="mobile-menu-panel">
+            {[
+              { label: 'Broadcast', icon: Mail, color: '#6366F1', action: () => { setMobileMenuOpen(false); handleOpenBroadcast(); } },
+              { label: 'Templates', icon: Layout, color: '#10B981', action: () => { setMobileMenuOpen(false); setShowTemplates(true); } },
+              { label: 'Activity', icon: Eye, color: '#3B82F6', action: () => navigate("/admin/activity") },
+              { label: 'Plan', icon: Zap, color: '#D4AF37', action: () => navigate("/admin/billing") },
+              { label: 'Branding', icon: Palette, color: '#EC4899', action: () => navigate("/admin/branding") },
+              { label: 'Help', icon: HelpCircle, color: '#14B8A6', action: () => navigate("/admin/help") },
+              { label: 'Settings', icon: Settings, color: '#78716C', action: () => navigate("/admin/settings") },
+            ].map(({ label, icon: Icon, color, action }) => (
+              <button key={label} data-testid={`mobile-nav-${label.toLowerCase()}`} onClick={action}
+                className="w-full flex items-center gap-3 px-2 py-3 text-sm border-b last:border-b-0 text-left" style={{ borderColor: 'rgba(0,0,0,0.05)', color: '#1C1917', fontFamily: 'Manrope, sans-serif' }}>
+                <Icon className="w-4 h-4" style={{ color }} /> {label}
+              </button>
+            ))}
+            <button data-testid="mobile-nav-logout" onClick={() => { localStorage.removeItem("admin_token"); navigate("/admin"); }}
+              className="w-full flex items-center gap-3 px-2 py-3 text-sm text-left" style={{ color: '#DC2626', fontFamily: 'Manrope, sans-serif' }}>
+              <LogOut className="w-4 h-4" /> Log out
+            </button>
+          </div>
+        )}
       </header>
 
       <main className="max-w-screen-xl mx-auto px-6 py-10">

@@ -54,6 +54,8 @@ apiClient.interceptors.response.use(
 export const checkSetup = () => apiClient.get('/admin/check-setup');
 export const setupAdmin = (data) => apiClient.post('/admin/setup', data);
 export const loginAdmin = (data) => apiClient.post('/admin/login', data);
+export const forgotPassword = (identifier) => apiClient.post('/admin/forgot-password', { identifier });
+export const resetPassword = (token, new_password) => apiClient.post('/admin/reset-password', { token, new_password });
 
 // Super Admin
 export const superLogin = (data) => apiClient.post('/super/login', data);

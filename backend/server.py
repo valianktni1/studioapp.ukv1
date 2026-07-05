@@ -898,7 +898,51 @@ async def stripe_webhook(request: Request):
             await _activate_subscription(tx)
     return {"received": True}
 
-# ─── Self-serve signup ───
+@api_router.post("/webhook/paypal/{tenant_id}")
+async def paypal_webhook(tenant_id: str, request: Request):
+    """Receive PayPal webhook events for a tenant's print orders. We re-verify the order
+    status via PayPal's API (using the tenant's own credentials) rather than trusting the
+    payload signature, then mark the matching print order paid + notify."""
+    try:
+        body = await request.json()
+    except Exception:
+        return {"received": True}
+    resource = body.get("resource", {}) or {}
+    # PayPal order id can appear in several places depending on the event type
+    pp_order_id = (
+        resource.get("id")
+        or (resource.get("supplementary_data", {}) or {}).get("related_ids", {}).get("order_id")
+        or (resource.get("purchase_units", [{}])[0].get("payments", {}) if resource.get("purchase_units") else None)
+    )
+    if not isinstance(pp_order_id, str) or not pp_order_id:
+        return {"received": True}
+    try:
+        use_tenant(tenant_id)
+        order = await db.print_orders.find_one({"paypal_order_id": pp_order_id}, {"_id": 0})
+        if not order or order.get("status") == "paid":
+            return {"received": True}
+        ps = await get_print_settings()
+        if ps.get("paypal_method") != "api" or not ps.get("paypal_client_id") or not ps.get("paypal_secret"):
+            return {"received": True}
+        token_val = await _paypal_access_token(ps["paypal_client_id"], ps["paypal_secret"], ps["paypal_mode"])
+        async with httpx.AsyncClient(timeout=20) as client:
+            resp = await client.get(
+                f"{_paypal_base(ps['paypal_mode'])}/v2/checkout/orders/{pp_order_id}",
+                headers={"Authorization": f"Bearer {token_val}"},
+            )
+        status = resp.json().get("status") if resp.status_code == 200 else None
+        if status in ("COMPLETED", "APPROVED"):
+            await db.print_orders.update_one(
+                {"id": order["id"]},
+                {"$set": {"status": "paid", "updated_at": datetime.now(timezone.utc).isoformat()}}
+            )
+            await notify_tenant_order_paid({**order, "status": "paid"})
+            await notify_client_order_receipt({**order, "status": "paid"})
+            logger.info(f"PayPal webhook marked order {order['id'][:8]} paid for tenant {tenant_id}")
+    except Exception as e:
+        logger.error(f"PayPal webhook error for {tenant_id}: {e}")
+    return {"received": True}
+
 class SignupReq(BaseModel):
     business_name: str
     username: str
@@ -1384,7 +1428,81 @@ async def change_password(data: PasswordChange, admin=Depends(get_admin)):
     await control_db.admins.update_one({"id": admin["sub"]}, {"$set": {"password": new_hashed}})
     return {"message": "Password changed successfully"}
 
-# ─── Two-Factor Authentication ───
+# ─── Password Reset (forgot password) ───
+class ForgotPasswordReq(BaseModel):
+    identifier: str  # username or email
+
+class ResetPasswordReq(BaseModel):
+    token: str
+    new_password: str
+
+@api_router.post("/admin/forgot-password")
+async def forgot_password(data: ForgotPasswordReq):
+    """Send a password-reset link via the tenant's SMTP. Always returns generic success (no user enumeration)."""
+    generic = {"message": "If an account matches, a reset link has been sent to the studio's email."}
+    ident = (data.identifier or "").strip()
+    if not ident:
+        return generic
+    admin = await control_db.admins.find_one(
+        {"$or": [
+            {"username": {"$regex": f"^{re.escape(ident)}$", "$options": "i"}},
+            {"email": {"$regex": f"^{re.escape(ident)}$", "$options": "i"}},
+        ]},
+        {"_id": 0}
+    )
+    if not admin:
+        return generic
+    tenant_id = admin["tenant_id"]
+    raw_token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(raw_token.encode()).hexdigest()
+    expires = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+    await control_db.password_resets.insert_one({
+        "token_hash": token_hash, "admin_id": admin["id"], "tenant_id": tenant_id,
+        "expires_at": expires, "used": False, "created_at": datetime.now(timezone.utc).isoformat(),
+    })
+    # Build + send the email using the tenant's own SMTP
+    try:
+        use_tenant(tenant_id)
+        doc = await db.settings.find_one({"key": "smtp"}, {"_id": 0})
+        smtp = (doc or {}).get("value", {})
+        tenant = await control_db.tenants.find_one({"id": tenant_id}, {"_id": 0})
+        recipient = smtp.get("smtp_email") or (tenant or {}).get("contact_email") or admin.get("email")
+        if smtp.get("smtp_email") and smtp.get("smtp_password") and smtp.get("smtp_server") and recipient:
+            base = (smtp.get("site_url") or "").rstrip("/")
+            link = f"{base}/admin/reset?token={raw_token}" if base else f"/admin/reset?token={raw_token}"
+            content = f"""
+<p style='font-size:18px;color:#1C1917;margin:0 0 8px;font-weight:bold;'>Reset your password</p>
+<p style='font-size:14px;color:#57534E;margin:0 0 18px;'>We received a request to reset the password for your studio admin account. This link expires in 1 hour and can be used once.</p>
+<p style='margin:0 0 22px;'><a href='{link}' style='display:inline-block;background:#1C1917;color:#D4AF37;text-decoration:none;padding:12px 26px;border-radius:4px;font-size:13px;letter-spacing:1px;'>Reset Password</a></p>
+<p style='font-size:12px;color:#A8A29E;margin:0;'>If you didn't request this, you can safely ignore this email — your password won't change.</p>
+"""
+            html = build_branded_email(content, get_awards_url(smtp), brand=(tenant or {}).get("business_name") or "StudioApp", logo_url=await get_tenant_logo_email_url(smtp))
+            threading.Thread(target=send_smtp_email, args=(smtp, recipient, "Reset your StudioApp password", html), daemon=True).start()
+            logger.info(f"Password reset email queued to {recipient} for tenant {tenant_id}")
+        else:
+            logger.info(f"Password reset requested for {tenant_id} but tenant SMTP not configured")
+    except Exception as e:
+        logger.error(f"forgot_password email failed: {e}")
+    return generic
+
+@api_router.post("/admin/reset-password")
+async def reset_password(data: ResetPasswordReq):
+    if not data.token or not data.new_password or len(data.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Please provide a valid token and a password of at least 6 characters")
+    token_hash = hashlib.sha256(data.token.strip().encode()).hexdigest()
+    rec = await control_db.password_resets.find_one({"token_hash": token_hash}, {"_id": 0})
+    if not rec or rec.get("used"):
+        raise HTTPException(status_code=400, detail="This reset link is invalid or has already been used")
+    try:
+        expired = datetime.fromisoformat(rec["expires_at"]) < datetime.now(timezone.utc)
+    except Exception:
+        expired = True
+    if expired:
+        raise HTTPException(status_code=400, detail="This reset link has expired. Please request a new one")
+    new_hashed = bcrypt.hashpw(data.new_password.encode(), bcrypt.gensalt()).decode()
+    await control_db.admins.update_one({"id": rec["admin_id"]}, {"$set": {"password": new_hashed}})
+    await control_db.password_resets.update_one({"token_hash": token_hash}, {"$set": {"used": True}})
+    return {"message": "Your password has been reset. You can now sign in."}
 class TotpVerify(BaseModel):
     code: str
 

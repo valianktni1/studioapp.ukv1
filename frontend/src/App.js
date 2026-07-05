@@ -15,6 +15,7 @@ import ShareAccess from "@/pages/ShareAccess";
 import ShareView from "@/pages/ShareView";
 import SlideshowDirect from "@/pages/SlideshowDirect";
 import PrintShop from "@/pages/PrintShop";
+import AdminPasswordReset from "@/pages/AdminPasswordReset";
 
 function App() {
   return (
@@ -22,6 +23,8 @@ function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/admin" element={<AdminLogin />} />
+          <Route path="/admin/forgot" element={<AdminPasswordReset />} />
+          <Route path="/admin/reset" element={<AdminPasswordReset />} />
           <Route path="/admin/dashboard" element={<AdminDashboard />} />
           <Route path="/admin/galleries" element={<AdminDashboard />} />
           <Route path="/admin/gallery/:id" element={<AdminGalleryDetail />} />

@@ -283,6 +283,16 @@ export default function AdminLogin() {
             </Button>
 
             {!needsSetup && (
+              <div className="text-center -mt-2">
+                <button type="button" data-testid="forgot-password-link" onClick={() => navigate("/admin/forgot")}
+                  className="text-xs text-[#57534E] hover:text-[#D4AF37] underline underline-offset-4"
+                  style={{ fontFamily: 'Manrope, sans-serif', transition: 'color 0.2s ease' }}>
+                  Forgot your password?
+                </button>
+              </div>
+            )}
+
+            {!needsSetup && (
               <div className="pt-6 mt-2 border-t border-[#E7E5E4] text-center">
                 <p className="text-sm" style={{ color: '#57534E', fontFamily: 'Manrope, sans-serif' }}>
                   New here?{" "}
