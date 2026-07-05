@@ -88,6 +88,15 @@ export default function AdminLogin() {
 
   return (
     <div className="min-h-screen flex relative noise-bg" style={{ backgroundColor: '#FDFCF8' }}>
+      {/* Mobile - faded background image (hidden on desktop where the side image shows) */}
+      <div className="lg:hidden absolute inset-0 z-0" aria-hidden="true">
+        <img
+          src="https://images.unsplash.com/photo-1624635446269-ea81d79bbc30?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA0MTJ8MHwxfHNlYXJjaHwyfHx3ZWRkaW5nJTIwY291cGxlJTIwc3Vuc2V0JTIwcm9tYW50aWMlMjBhcnRpc3RpY3xlbnwwfHx8fDE3NzEzNjM2MTR8MA&ixlib=rb-4.1.0&q=85"
+          alt=""
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(253,252,248,0.90) 0%, rgba(253,252,248,0.82) 45%, rgba(253,252,248,0.92) 100%)' }} />
+      </div>
       {/* Left - Hero Image */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
         <img
@@ -119,7 +128,7 @@ export default function AdminLogin() {
       </div>
 
       {/* Right - Login Form */}
-      <div className="flex-1 flex items-center justify-center p-8 lg:p-16">
+      <div className="flex-1 flex items-center justify-center p-8 lg:p-16 relative z-10">
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
