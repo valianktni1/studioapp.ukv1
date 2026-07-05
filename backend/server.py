@@ -120,6 +120,10 @@ JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_HOURS = 48
 MAX_UPLOAD_SIZE = 40 * 1024 * 1024 * 1024  # 40GB for admin
 MAX_GUEST_UPLOAD_SIZE = 500 * 1024 * 1024  # 500MB per file for guests
+# Auto video optimiser only runs for videos in this size range. Smaller videos
+# stream fine as-is; larger than the max are streamed as the original (with faststart).
+VIDEO_OPTIMISE_MIN_BYTES = 300 * 1024 * 1024  # 300 MB
+VIDEO_OPTIMISE_MAX_BYTES = 20 * 1024 * 1024 * 1024  # 20 GB
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api", dependencies=[Depends(tenant_context_dep)])
@@ -1264,9 +1268,19 @@ def generate_thumbnails_background(file_path: Path, gallery_id: str, subfolder: 
         sync_client.close()
         logger.info(f"Thumbnails generated for {filename}")
         
-        # Kick off web-optimised transcode in SEPARATE pool so it never blocks thumbnail workers
+        # Kick off web-optimised transcode in SEPARATE pool so it never blocks thumbnail workers.
+        # Only optimise videos between VIDEO_OPTIMISE_MIN_BYTES and VIDEO_OPTIMISE_MAX_BYTES;
+        # smaller videos stream fine as-is, larger ones stream as the original (faststart applied above).
         if file_type == "video":
-            transcode_executor.submit(create_web_version, file_path, gallery_id, file_id)
+            try:
+                vsize = file_path.stat().st_size
+            except OSError:
+                vsize = 0
+            if VIDEO_OPTIMISE_MIN_BYTES <= vsize <= VIDEO_OPTIMISE_MAX_BYTES:
+                logger.info(f"Queueing web optimisation for {filename} ({vsize / (1024*1024):.0f}MB)")
+                transcode_executor.submit(create_web_version, file_path, gallery_id, file_id)
+            else:
+                logger.info(f"Skipping web optimisation for {filename} ({vsize / (1024*1024):.0f}MB) - outside 300MB-20GB range")
     except Exception as e:
         logger.error(f"Background thumbnail error for {filename}: {e}")
 

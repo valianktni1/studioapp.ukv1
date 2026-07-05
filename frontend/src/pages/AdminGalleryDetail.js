@@ -666,6 +666,9 @@ export default function AdminGalleryDetail() {
                   <p className="text-sm mt-1 leading-relaxed" style={{ color: '#57534E' }}>
                     When you upload a video we create a lightweight, web-friendly copy so it <strong>streams smoothly online</strong> for your clients on any device. This is only used for in-gallery playback — <strong>your original file is never altered</strong>. When a client downloads the video they always receive the <strong>full-resolution original</strong> you uploaded.
                   </p>
+                  <p className="text-sm mt-2 leading-relaxed" style={{ color: '#1C1917' }}>
+                    <strong>Recommended:</strong> upload 1 video at a time — this gives each video time to optimise properly for smooth streaming.
+                  </p>
                 </div>
               </div>
               {/* Upload Zone */}
