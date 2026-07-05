@@ -67,6 +67,8 @@ export const superDeleteTenant = (id) => apiClient.delete(`/super/tenants/${id}`
 export const superPlans = () => apiClient.get('/super/plans');
 export const superOverview = () => apiClient.get('/super/overview');
 export const superPayments = () => apiClient.get('/super/payments');
+export const superStorage = () => apiClient.get('/super/storage');
+export const superBandwidth = () => apiClient.get('/super/bandwidth');
 export const superGetEmail = () => apiClient.get('/super/email-settings');
 export const superSaveEmail = (data) => apiClient.post('/super/email-settings', data);
 export const superTestEmail = () => apiClient.post('/super/email-settings/test');

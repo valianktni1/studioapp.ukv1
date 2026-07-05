@@ -125,6 +125,54 @@ MAX_GUEST_UPLOAD_SIZE = 500 * 1024 * 1024  # 500MB per file for guests
 VIDEO_OPTIMISE_MIN_BYTES = 300 * 1024 * 1024  # 300 MB
 VIDEO_OPTIMISE_MAX_BYTES = 20 * 1024 * 1024 * 1024  # 20 GB
 
+# ─── Usage tracking (storage + bandwidth) ───
+def _usage_today() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+async def record_usage(tenant_id: str, kind: str, nbytes):
+    """Accumulate upload/download bytes per tenant per day in control_db.usage_stats.
+    Best-effort: never raises to the caller."""
+    try:
+        n = int(nbytes or 0)
+    except (TypeError, ValueError):
+        n = 0
+    if not tenant_id or n <= 0:
+        return
+    field = "upload_bytes" if kind == "upload" else "download_bytes"
+    try:
+        await control_db.usage_stats.update_one(
+            {"tenant_id": tenant_id, "date": _usage_today()},
+            {"$inc": {field: n}},
+            upsert=True,
+        )
+    except Exception as e:
+        logger.error(f"Usage record failed ({kind}) for {tenant_id}: {e}")
+
+def _tenant_from_upload_path(p) -> Optional[str]:
+    """Derive tenant_id from a media path under UPLOAD_DIR (first path segment)."""
+    try:
+        rel = Path(p).resolve().relative_to(UPLOAD_DIR.resolve())
+        first = rel.parts[0]
+        if first.startswith(".") or first == "_shared":
+            return None
+        return first
+    except Exception:
+        return None
+
+def _dir_size_bytes(path) -> int:
+    """Total on-disk bytes under a directory (blocking; call via executor)."""
+    total = 0
+    p = Path(path)
+    if not p.exists():
+        return 0
+    for root, _dirs, files in os.walk(p):
+        for fn in files:
+            try:
+                total += (Path(root) / fn).stat().st_size
+            except OSError:
+                pass
+    return total
+
 app = FastAPI()
 api_router = APIRouter(prefix="/api", dependencies=[Depends(tenant_context_dep)])
 
@@ -636,6 +684,65 @@ async def super_payments(_super=Depends(get_super)):
         if is_paid:
             paid_total += float(x.get("amount", 0) or 0)
     return {"payments": txns, "count": len(txns), "paid_total": round(paid_total, 2), "currency": "GBP"}
+
+# ─── Super Admin: storage usage (MongoDB dbStats + on-disk media) ───
+@api_router.get("/super/storage")
+async def super_storage(_super=Depends(get_super)):
+    tenants = await control_db.tenants.find({}, {"_id": 0}).to_list(10000)
+    loop = asyncio.get_event_loop()
+    per = []
+    total_bytes = 0
+    for t in tenants:
+        tid = t["id"]
+        db_bytes = 0
+        try:
+            stats = await client[_tenant_db_name(tid)].command("dbStats")
+            db_bytes = int(stats.get("storageSize", 0) or 0)
+        except Exception:
+            db_bytes = 0
+        disk_bytes = await loop.run_in_executor(None, _dir_size_bytes, UPLOAD_DIR / tid)
+        tb = db_bytes + disk_bytes
+        total_bytes += tb
+        per.append({
+            "tenant_id": tid,
+            "business_name": t.get("business_name") or "—",
+            "subdomain": t.get("subdomain") or "",
+            "db_bytes": db_bytes,
+            "disk_bytes": disk_bytes,
+            "total_bytes": tb,
+        })
+    per.sort(key=lambda x: x["total_bytes"], reverse=True)
+    return {"total_bytes": total_bytes, "tenant_count": len(tenants), "per_tenant": per}
+
+# ─── Super Admin: internet usage / bandwidth (uploads + downloads) ───
+@api_router.get("/super/bandwidth")
+async def super_bandwidth(_super=Depends(get_super)):
+    now = datetime.now(timezone.utc)
+    today = now.strftime("%Y-%m-%d")
+    week_dates = [(now - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)]
+    rows = await control_db.usage_stats.find({"date": {"$in": week_dates}}, {"_id": 0}).to_list(100000)
+    tmap = {t["id"]: t.get("business_name", "—") for t in await control_db.tenants.find({}, {"_id": 0, "id": 1, "business_name": 1}).to_list(10000)}
+    today_up = today_down = week_up = week_down = 0
+    per = {}
+    for r in rows:
+        up = int(r.get("upload_bytes", 0) or 0)
+        down = int(r.get("download_bytes", 0) or 0)
+        week_up += up
+        week_down += down
+        if r.get("date") == today:
+            today_up += up
+            today_down += down
+        tid = r.get("tenant_id")
+        if tid not in per:
+            per[tid] = {"tenant_id": tid, "business_name": tmap.get(tid, "—"), "upload_bytes": 0, "download_bytes": 0}
+        per[tid]["upload_bytes"] += up
+        per[tid]["download_bytes"] += down
+    per_list = sorted(per.values(), key=lambda x: x["upload_bytes"] + x["download_bytes"], reverse=True)
+    return {
+        "today": {"upload_bytes": today_up, "download_bytes": today_down, "total_bytes": today_up + today_down},
+        "week": {"upload_bytes": week_up, "download_bytes": week_down, "total_bytes": week_up + week_down},
+        "per_tenant_week": per_list,
+    }
 
 # ─── Super Admin: platform email (SMTP) settings ───
 class PlatformSMTP(BaseModel):
@@ -1900,6 +2007,7 @@ async def upload_files(
         {"id": gallery_id},
         {"$set": {f"file_counts.{subfolder}": count, "updated_at": datetime.now(timezone.utc).isoformat()}}
     )
+    await record_usage(current_tenant_id(), "upload", sum(u.get("file_size", 0) for u in uploaded))
     return {"uploaded": uploaded, "count": len(uploaded)}
 
 @api_router.post("/admin/galleries/{gallery_id}/reprocess-videos")
@@ -2056,6 +2164,8 @@ async def download_subfolder_zip(gallery_id: str, subfolder: str = Query(...), a
     if not files:
         raise HTTPException(status_code=404, detail="No files in this subfolder")
 
+    await record_usage(current_tenant_id(), "download", sum(f.get("file_size", 0) for f in files))
+
     def iter_zip():
         buf = io.BytesIO()
         with zipfile.ZipFile(buf, 'w', zipfile.ZIP_STORED) as zf:
@@ -2091,6 +2201,10 @@ async def admin_download_file(gallery_id: str, file_id: str, admin=Depends(get_a
     file_path = get_gallery_path(gallery["folder_name"]) / f["subfolder"] / f["filename"]
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found on disk")
+    try:
+        await record_usage(current_tenant_id(), "download", file_path.stat().st_size)
+    except OSError:
+        pass
     return FileResponse(file_path, filename=f["filename"], media_type="application/octet-stream")
 
 # ─── Shares ───
@@ -2902,6 +3016,7 @@ async def stream_video_direct(vtoken: str, request: Request):
                      '.avi': 'video/x-msvideo', '.mkv': 'video/x-matroska', '.mts': 'video/mp2t'}
     content_type = content_types.get(ext, 'video/mp4')
     CHUNK_SIZE = 1024 * 1024  # 1MB chunks for large files
+    _dl_tid = _tenant_from_upload_path(file_path)
 
     range_header = request.headers.get("range")
     if range_header:
@@ -2911,6 +3026,7 @@ async def stream_video_direct(vtoken: str, request: Request):
         end = int(range_parts[1]) if range_parts[1] else min(start + 10 * 1024 * 1024, file_size - 1)
         end = min(end, file_size - 1)
         length = end - start + 1
+        await record_usage(_dl_tid, "download", length)
 
         async def async_iter_range():
             async with aiofiles.open(file_path, "rb") as fh:
@@ -2930,6 +3046,7 @@ async def stream_video_direct(vtoken: str, request: Request):
             "Cache-Control": "public, max-age=86400",
         })
     else:
+        await record_usage(_dl_tid, "download", file_size)
         return FileResponse(file_path, media_type=content_type, headers={
             "Accept-Ranges": "bytes",
             "Content-Length": str(file_size),
@@ -2967,6 +3084,7 @@ async def stream_share_video(token: str, file_id: str, request: Request, t: str 
         end = int(range_parts[1]) if range_parts[1] else min(start + 10 * 1024 * 1024, file_size - 1)
         end = min(end, file_size - 1)
         length = end - start + 1
+        await record_usage(current_tenant_id(), "download", length)
 
         async def async_iter_range():
             async with aiofiles.open(file_path, "rb") as fh:
@@ -2986,6 +3104,7 @@ async def stream_share_video(token: str, file_id: str, request: Request, t: str 
             "Cache-Control": "public, max-age=86400",
         })
     else:
+        await record_usage(current_tenant_id(), "download", file_size)
         return FileResponse(file_path, media_type=content_type, headers={
             "Accept-Ranges": "bytes",
             "Cache-Control": "public, max-age=86400",
@@ -3014,7 +3133,10 @@ async def download_share_file(token: str, file_id: str, request: Request, sessio
     await _log_download(session["gallery_id"], gallery.get("folder_name", "Unknown"),
                         share.get("label", token) if share else token, client_ip,
                         "single", [f["filename"]], f["subfolder"], 1, 1)
-    
+    try:
+        await record_usage(current_tenant_id(), "download", file_path.stat().st_size)
+    except OSError:
+        pass
     return FileResponse(file_path, filename=f["filename"], media_type="application/octet-stream")
 
 @api_router.post("/share/{token}/download-zip")
@@ -3057,6 +3179,7 @@ async def download_share_zip(token: str, request: Request, file_ids: List[str] =
                         share.get("label", token) if share else token, client_ip,
                         dl_type, [f["filename"] for f in files], sub,
                         len(files), total_available)
+    await record_usage(current_tenant_id(), "download", sum(f.get("file_size", 0) for f in files))
     
     if not files:
         raise HTTPException(status_code=404, detail="No files to download")
@@ -3120,6 +3243,7 @@ async def download_share_album_direct(token: str, request: Request, subfolder: s
                         share.get("label", token) if share else token, client_ip,
                         "album", [f["filename"] for f in files], subfolder,
                         len(files), total_available)
+    await record_usage(current_tenant_id(), "download", sum(f.get("file_size", 0) for f in files))
 
     def iter_zip():
         buf = io.BytesIO()
@@ -3188,6 +3312,7 @@ async def download_share_favourites_direct(token: str, request: Request, jwt_tok
                         share.get("label", token) if share else token, client_ip,
                         "favourites", [f["filename"] for f in files], "Favourites",
                         len(files), len(files))
+    await record_usage(current_tenant_id(), "download", sum(f.get("file_size", 0) for f in files))
 
     def iter_zip():
         buf = io.BytesIO()
@@ -3355,6 +3480,7 @@ async def guest_upload(
     )
     
     result = {"uploaded": uploaded, "count": len(uploaded)}
+    await record_usage(current_tenant_id(), "upload", sum(u.get("file_size", 0) for u in uploaded))
     if skipped_too_large:
         result["skipped"] = skipped_too_large
         result["message"] = f"{len(skipped_too_large)} file(s) exceeded 500MB limit and were not uploaded"

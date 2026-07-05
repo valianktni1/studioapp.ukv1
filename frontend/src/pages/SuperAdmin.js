@@ -13,12 +13,14 @@ import {
 import {
   Building2, Plus, Trash2, Power, LogOut, Users, Layers, LayoutDashboard,
   CreditCard, Mail, Send, TrendingUp, Clock, CheckCircle2, Loader2,
-  Infinity as InfinityIcon, FileText, Pencil, X, CalendarPlus
+  Infinity as InfinityIcon, FileText, Pencil, X, CalendarPlus, HardDrive, Wifi,
+  ArrowUpCircle, ArrowDownCircle
 } from "lucide-react";
 import {
   superLogin, superListTenants, superCreateTenant, superSetStatus, superSetPlan, superDeleteTenant, getErrorMessage,
   superOverview, superPayments, superGetEmail, superSaveEmail, superTestEmail, superBroadcastRecipients, superBroadcast,
   superExtendTrial, superEmailTenant, superListTemplates, superCreateTemplate, superUpdateTemplate, superDeleteTemplate,
+  superStorage, superBandwidth,
 } from "@/lib/api";
 
 const FOREVER_DATE = "9999-12-31T23:59:59+00:00";
@@ -109,6 +111,7 @@ export default function SuperAdmin() {
   const TABS = [
     { id: "overview", label: "Overview", icon: LayoutDashboard },
     { id: "photographers", label: "Photographers", icon: Users },
+    { id: "usage", label: "Storage & Usage", icon: HardDrive },
     { id: "payments", label: "Payments", icon: CreditCard },
     { id: "email", label: "Broadcast Email", icon: Mail },
   ];
@@ -144,6 +147,7 @@ export default function SuperAdmin() {
 
       <main className="max-w-screen-lg mx-auto px-6 py-10">
         {tab === "overview" && <OverviewTab />}
+        {tab === "usage" && <UsageTab />}
         {tab === "payments" && <PaymentsTab />}
         {tab === "email" && <EmailTab />}
         {tab === "photographers" && (
@@ -267,6 +271,107 @@ function OverviewTab() {
     </div>
   );
 }
+
+const fmtBytes = (b) => {
+  const n = Number(b || 0);
+  const gb = n / (1024 ** 3);
+  if (gb >= 1024) return (gb / 1024).toFixed(2) + " TB";
+  if (gb >= 1) return gb.toFixed(2) + " GB";
+  const mb = n / (1024 ** 2);
+  if (mb >= 1) return mb.toFixed(1) + " MB";
+  if (n >= 1024) return (n / 1024).toFixed(0) + " KB";
+  return n + " B";
+};
+
+function UsageTab() {
+  const [storage, setStorage] = useState(null);
+  const [bw, setBw] = useState(null);
+  const [err, setErr] = useState(false);
+  useEffect(() => {
+    superBandwidth().then(r => setBw(r.data)).catch(e => { setErr(true); toast.error(getErrorMessage(e)); });
+    superStorage().then(r => setStorage(r.data)).catch(e => { setErr(true); toast.error(getErrorMessage(e)); });
+  }, []);
+
+  return (
+    <div data-testid="usage-tab" className="space-y-12">
+      {/* Storage */}
+      <section>
+        <h2 className="text-sm uppercase tracking-widest mb-4 flex items-center gap-2" style={{ color: "#A1A1AA" }}>
+          <HardDrive className="w-4 h-4" /> Total storage
+        </h2>
+        {!storage ? <p className="text-white/50" data-testid="storage-loading">Loading…</p> : (
+          <>
+            <div className="rounded-lg border border-white/10 p-6 mb-6" style={{ background: "rgba(212,175,55,0.06)" }}>
+              <div className="text-xs uppercase tracking-wider" style={{ color: "#71717A" }}>Platform-wide (database + media on disk)</div>
+              <div className="text-5xl font-semibold mt-2" style={{ color: "#D4AF37" }} data-testid="storage-total">{fmtBytes(storage.total_bytes)}</div>
+              <div className="text-xs mt-2" style={{ color: "#71717A" }}>{storage.tenant_count} photographer{storage.tenant_count === 1 ? "" : "s"}</div>
+            </div>
+            <h3 className="text-xs uppercase tracking-widest mb-3" style={{ color: "#71717A" }}>Per photographer</h3>
+            <div className="space-y-2" data-testid="storage-per-tenant">
+              {storage.per_tenant.length === 0 && <p className="text-white/40 text-sm">No photographers yet.</p>}
+              {storage.per_tenant.map((t) => (
+                <div key={t.tenant_id} className="rounded-lg border border-white/10 p-3 flex items-center justify-between gap-4" style={{ background: "rgba(255,255,255,0.02)" }}>
+                  <div className="min-w-0">
+                    <div className="font-medium truncate">{t.business_name}</div>
+                    <div className="text-xs mt-0.5" style={{ color: "#71717A" }}>media {fmtBytes(t.disk_bytes)} · db {fmtBytes(t.db_bytes)}</div>
+                  </div>
+                  <div className="text-lg font-semibold shrink-0" style={{ color: "#F5F5F4" }}>{fmtBytes(t.total_bytes)}</div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </section>
+
+      {/* Bandwidth */}
+      <section>
+        <h2 className="text-sm uppercase tracking-widest mb-4 flex items-center gap-2" style={{ color: "#A1A1AA" }}>
+          <Wifi className="w-4 h-4" /> Internet usage (bandwidth)
+        </h2>
+        {!bw ? <p className="text-white/50" data-testid="bandwidth-loading">Loading…</p> : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div className="rounded-lg border border-white/10 p-5" style={{ background: "rgba(255,255,255,0.02)" }}>
+                <div className="text-xs uppercase tracking-wider mb-3" style={{ color: "#71717A" }}>Today</div>
+                <div className="text-3xl font-semibold" data-testid="bw-today-total">{fmtBytes(bw.today.total_bytes)}</div>
+                <div className="flex gap-4 mt-3 text-sm">
+                  <span className="flex items-center gap-1" style={{ color: "#4ade80" }}><ArrowUpCircle className="w-4 h-4" /> {fmtBytes(bw.today.upload_bytes)}</span>
+                  <span className="flex items-center gap-1" style={{ color: "#60a5fa" }}><ArrowDownCircle className="w-4 h-4" /> {fmtBytes(bw.today.download_bytes)}</span>
+                </div>
+              </div>
+              <div className="rounded-lg border border-white/10 p-5" style={{ background: "rgba(255,255,255,0.02)" }}>
+                <div className="text-xs uppercase tracking-wider mb-3" style={{ color: "#71717A" }}>This week (last 7 days)</div>
+                <div className="text-3xl font-semibold" data-testid="bw-week-total">{fmtBytes(bw.week.total_bytes)}</div>
+                <div className="flex gap-4 mt-3 text-sm">
+                  <span className="flex items-center gap-1" style={{ color: "#4ade80" }}><ArrowUpCircle className="w-4 h-4" /> {fmtBytes(bw.week.upload_bytes)}</span>
+                  <span className="flex items-center gap-1" style={{ color: "#60a5fa" }}><ArrowDownCircle className="w-4 h-4" /> {fmtBytes(bw.week.download_bytes)}</span>
+                </div>
+              </div>
+            </div>
+            <p className="text-xs mb-4" style={{ color: "#71717A" }}>
+              <ArrowUpCircle className="w-3 h-3 inline mr-1" style={{ color: "#4ade80" }} />Uploads
+              <ArrowDownCircle className="w-3 h-3 inline mx-1 ml-3" style={{ color: "#60a5fa" }} />Downloads &amp; streaming · History builds up from now.
+            </p>
+            <h3 className="text-xs uppercase tracking-widest mb-3" style={{ color: "#71717A" }}>Per photographer (this week)</h3>
+            <div className="space-y-2" data-testid="bandwidth-per-tenant">
+              {(bw.per_tenant_week || []).length === 0 && <p className="text-white/40 text-sm">No bandwidth recorded yet.</p>}
+              {(bw.per_tenant_week || []).map((t) => (
+                <div key={t.tenant_id} className="rounded-lg border border-white/10 p-3 flex items-center justify-between gap-4" style={{ background: "rgba(255,255,255,0.02)" }}>
+                  <div className="font-medium truncate">{t.business_name}</div>
+                  <div className="flex gap-4 text-sm shrink-0">
+                    <span className="flex items-center gap-1" style={{ color: "#4ade80" }}><ArrowUpCircle className="w-4 h-4" /> {fmtBytes(t.upload_bytes)}</span>
+                    <span className="flex items-center gap-1" style={{ color: "#60a5fa" }}><ArrowDownCircle className="w-4 h-4" /> {fmtBytes(t.download_bytes)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </section>
+    </div>
+  );
+}
+
 
 function PaymentsTab() {
   const [d, setD] = useState(null);
