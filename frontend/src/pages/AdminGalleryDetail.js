@@ -160,19 +160,48 @@ export default function AdminGalleryDetail() {
     if (!fileList?.length || !activeTab) return;
     setUploading(true);
     setUploadProgress(0);
+    const arr = Array.from(fileList);
+    const total = arr.length;
+    const isVid = (f) => /\.(mp4|mov|avi|mkv|wmv|webm|m4v|flv|mts|m2ts)$/i.test(f.name);
+    const hasVideos = arr.some(isVid);
+
+    // Batch to keep each request small & reliable (avoids proxy body-size / timeout limits on big drops).
+    // Photos/others: 25 per request. Videos: one per request (they're large).
+    const PHOTO_BATCH = 25;
+    const photos = arr.filter(f => !isVid(f));
+    const videos = arr.filter(isVid);
+    const batches = [];
+    for (let i = 0; i < photos.length; i += PHOTO_BATCH) batches.push(photos.slice(i, i + PHOTO_BATCH));
+    videos.forEach(v => batches.push([v]));
+
+    let done = 0;
+    let failed = 0;
     try {
-      const arr = Array.from(fileList);
-      const hasVideos = arr.some(f => /\.(mp4|mov|avi|mkv|wmv|webm|m4v|flv|mts|m2ts)$/i.test(f.name));
-      await uploadFiles(id, activeTab, arr, (e) => {
-        setUploadProgress(Math.round((e.loaded * 100) / e.total));
-      });
-      toast.success(`${arr.length} file(s) uploaded to ${activeTab}`);
+      for (const batch of batches) {
+        try {
+          await uploadFiles(id, activeTab, batch, (e) => {
+            const frac = e.total ? e.loaded / e.total : 0;
+            setUploadProgress(Math.min(99, Math.round(((done + frac * batch.length) / total) * 100)));
+          });
+          done += batch.length;
+        } catch (err) {
+          failed += batch.length;
+          done += batch.length;
+        }
+        setUploadProgress(Math.min(99, Math.round((done / total) * 100)));
+      }
+      setUploadProgress(100);
+      if (failed === 0) {
+        toast.success(`${total} file(s) uploaded to ${activeTab}`);
+      } else if (failed < total) {
+        toast.warning(`${total - failed} uploaded, ${failed} failed — re-select the failed files and try again.`);
+      } else {
+        toast.error("Upload failed. Please try again.");
+      }
       loadGallery();
       if (hasVideos) {
         setTimeout(() => startTranscodePolling(), 3000);
       }
-    } catch (err) {
-      toast.error("Upload failed");
     } finally {
       setUploading(false);
       setUploadProgress(0);
