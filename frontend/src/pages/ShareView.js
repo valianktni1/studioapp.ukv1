@@ -657,6 +657,9 @@ function ShareViewFull() {
               <p className="text-xl font-medium italic mt-1" style={{ fontFamily: 'Cormorant Garamond, serif', color: t.headingColor }}>
                 StudioApp
               </p>
+              <p className="text-xs mt-3 tracking-wide" style={{ fontFamily: 'Manrope, sans-serif', color: t.textSub }}>
+                &copy; {new Date().getFullYear()} {branding.business_name}
+              </p>
             </div>
           </div>
         </footer>
@@ -857,6 +860,9 @@ function ShareViewFull() {
             </p>
             <p className="text-xl font-medium italic mt-1" style={{ fontFamily: 'Cormorant Garamond, serif', color: t.headingColor }}>
               StudioApp
+            </p>
+            <p className="text-xs mt-3 tracking-wide" style={{ fontFamily: 'Manrope, sans-serif', color: t.textSub }}>
+              &copy; {new Date().getFullYear()} {branding.business_name}
             </p>
           </div>
         </div>

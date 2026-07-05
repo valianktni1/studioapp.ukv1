@@ -83,10 +83,8 @@ export default function SuperAdmin() {
       <div className="min-h-screen flex items-center justify-center px-6" style={{ background: "#0B0B0F", color: "#F5F5F4" }}>
         <form onSubmit={doLogin} className="w-full max-w-sm" data-testid="super-login-form">
           <div className="mb-10 text-center">
-            <div className="inline-flex items-center gap-2 text-2xl font-semibold tracking-tight">
-              <Layers className="w-6 h-6" style={{ color: "#D4AF37" }} /> StudioApp
-            </div>
-            <p className="text-sm mt-2" style={{ color: "#A1A1AA" }}>Platform Administration</p>
+            <img src="/studioapp-logo.png" alt="StudioApp" className="h-16 w-auto mx-auto rounded-lg" />
+            <p className="text-sm mt-3" style={{ color: "#A1A1AA" }}>Platform Administration</p>
           </div>
           <Label className="text-xs tracking-wider" style={{ color: "#A1A1AA" }}>Username</Label>
           <Input data-testid="super-username" value={creds.username} onChange={(e) => setCreds({ ...creds, username: e.target.value })}
@@ -113,7 +111,7 @@ export default function SuperAdmin() {
       <header className="border-b border-white/10 sticky top-0 z-30" style={{ background: "rgba(11,11,15,0.9)", backdropFilter: "blur(12px)" }}>
         <div className="max-w-screen-lg mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2 text-lg font-semibold">
-            <Layers className="w-5 h-5" style={{ color: "#D4AF37" }} /> StudioApp <span className="text-xs font-normal" style={{ color: "#71717A" }}>· Platform</span>
+            <img src="/studioapp-logo.png" alt="StudioApp" className="h-9 w-auto rounded" /> <span className="text-xs font-normal" style={{ color: "#71717A" }}>· Platform</span>
           </div>
           <div className="flex items-center gap-2">
             {tab === "photographers" && (

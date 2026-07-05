@@ -136,7 +136,8 @@ export default function AdminLogin() {
           className="w-full max-w-md"
         >
           <div className="flex items-center gap-3 mb-16">
-            <span className="text-3xl font-semibold tracking-tight" style={{ fontFamily: 'Cormorant Garamond, serif' }}>StudioApp</span>
+            <img src="/studioapp-logo.png" alt="StudioApp" data-testid="login-logo"
+              className="h-14 w-auto rounded-lg" style={{ backgroundColor: '#000' }} />
           </div>
 
           <h2
@@ -299,6 +300,12 @@ export default function AdminLogin() {
               </>
             )}
           </form>
+
+          <div className="mt-12 text-center" data-testid="login-footer">
+            <p className="text-xs tracking-wide" style={{ color: '#A8A29E', fontFamily: 'Manrope, sans-serif' }}>
+              Site Designed &amp; Hosted by <span className="font-semibold text-[#57534E]">StudioApp</span>
+            </p>
+          </div>
         </motion.div>
       </div>
     </div>
