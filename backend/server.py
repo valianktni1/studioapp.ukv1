@@ -4462,6 +4462,8 @@ async def check_expiry_reminders():
         return 0
 
     smtp = smtp_doc["value"]
+    branding = await get_tenant_branding(current_tenant_id())
+    business_name = branding.get("business_name") or smtp.get("sender_name") or "Your Photographer"
     now = datetime.now(timezone.utc)
     remind_start = now + timedelta(days=6)
     remind_end = now + timedelta(days=8)
@@ -4525,8 +4527,7 @@ Thank you once again for choosing me to capture your wedding day. It really was 
 </p>
 <p style="font-size:15px;color:#1C1917;margin:0;line-height:1.8;">
 Speak soon,<br><br>
-<strong>Your Photographer</strong><br>
-<em>StudioApp</em>
+<strong>{business_name}</strong>
 </p>"""
 
             html_body = build_branded_email(reminder_html, get_awards_url(smtp))
