@@ -149,7 +149,7 @@ export const uploadFiles = (galleryId, subfolder, files, onProgress) => {
   return apiClient.post(`/admin/galleries/${galleryId}/upload`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
     onUploadProgress: onProgress,
-    timeout: 600000,
+    timeout: 0,
   });
 };
 export const deleteFile = (galleryId, fileId, deleteBackup = false) =>
