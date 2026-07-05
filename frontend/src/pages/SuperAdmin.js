@@ -240,11 +240,11 @@ function OverviewTab() {
         <Stat icon={<Building2 className="w-5 h-5" />} label="Suspended" value={d.suspended} accent={d.suspended ? "#f87171" : undefined} />
       </div>
       <h2 className="text-sm uppercase tracking-widest mb-4" style={{ color: "#A1A1AA" }}>Trials ending in the next 7 days</h2>
-      {d.trials_ending_soon.length === 0 ? (
+      {(d.trials_ending_soon || []).length === 0 ? (
         <p className="text-white/40 text-sm">No trials ending soon.</p>
       ) : (
         <div className="space-y-2" data-testid="trials-ending-list">
-          {d.trials_ending_soon.map((t, i) => (
+          {(d.trials_ending_soon || []).map((t, i) => (
             <div key={i} className="rounded-lg border border-white/10 p-3 flex items-center justify-between" style={{ background: "rgba(255,255,255,0.02)" }}>
               <span className="font-medium">{t.business_name}</span>
               <span className="text-xs" style={{ color: "#D4AF37" }}>ends {fmtDate(t.trial_ends_at)}</span>

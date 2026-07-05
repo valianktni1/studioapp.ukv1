@@ -50,3 +50,7 @@ user "Mark"), tenants (photographers), and tenant customisation. Do NOT reinvent
 3. **Smooth video playback over the net**: set backend env `NGINX_VIDEO_URL=1` (any value) to use the nginx-video container. Unset = jerky Python streaming. nginx video path is tenant-prefixed: `/uploads/{tenant_id}/{gallery}/{sub}/{file}` (fixed in generate_nginx_video_url).
 4. **Super admin password**: env is source of truth; ensure_super_admin() force-syncs SUPER_ADMIN_PASSWORD on every startup. Login at /super or /superadmin. Wrap the value in single quotes in YAML if it has special chars.
 5. Root `/` = photographer Sign In + "Create your studio" (-> /signup trial). Super admin at /super.
+
+## SUPER ADMIN v2 (2026-06)
+4-tab platform dashboard (SuperAdmin.js): Overview (tenants by status, galleries, MRR, total revenue, trials ending in 7 days), Photographers (existing tenant CRUD), Payments (control_db.payment_transactions table + paid total), Broadcast Email (platform SMTP in control_db.settings key 'platform_smtp' + send announcement to all photographers' contact/login emails). Backend endpoints: /super/overview, /super/payments, /super/email-settings (GET/POST + /test), /super/broadcast (+/recipients). Reuses send_smtp_email()/build_branded_email(). GET email-settings masks password; POST preserves on masked placeholder. Verified iteration_16 (100% frontend).
+Also this session: batched uploads (25 photos/req, videos 1/req) for 1000+ image drops; removed "delete from backup" checkbox from delete dialogs; index.html rebranded to StudioApp.
