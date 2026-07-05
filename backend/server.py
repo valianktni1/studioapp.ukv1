@@ -6,6 +6,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import io
 import logging
+import re
 import shutil
 import zipfile
 import secrets
@@ -902,16 +903,20 @@ class SignupReq(BaseModel):
 
 @api_router.post("/signup")
 async def self_signup(data: SignupReq):
-    if await control_db.admins.find_one({"username": data.username}):
+    username = (data.username or "").strip()
+    business_name = (data.business_name or "").strip()
+    if not username or not data.password or not business_name:
+        raise HTTPException(status_code=400, detail="Please fill in all fields")
+    if await control_db.admins.find_one({"username": {"$regex": f"^{re.escape(username)}$", "$options": "i"}}):
         raise HTTPException(status_code=400, detail="Username already in use")
     if data.plan not in PLANS:
         raise HTTPException(status_code=400, detail="Invalid plan")
-    tenant_id, slug = await _provision_tenant(data.business_name, data.username, data.password, data.plan, with_demo=True)
+    tenant_id, slug = await _provision_tenant(business_name, username, data.password, data.plan, with_demo=True)
     trial_ends = (datetime.now(timezone.utc) + timedelta(days=TRIAL_DAYS)).isoformat()
     await control_db.tenants.update_one({"id": tenant_id}, {"$set": {"subscription_status": "trialing", "trial_ends_at": trial_ends}})
     admin = await control_db.admins.find_one({"tenant_id": tenant_id})
-    token = create_jwt({"sub": admin["id"], "role": "admin", "username": data.username, "tenant_id": tenant_id})
-    return {"token": token, "username": data.username, "display_name": data.business_name, "trial_ends_at": trial_ends}
+    token = create_jwt({"sub": admin["id"], "role": "admin", "username": username, "tenant_id": tenant_id})
+    return {"token": token, "username": username, "display_name": business_name, "trial_ends_at": trial_ends}
 
 
 
@@ -1310,7 +1315,10 @@ async def admin_login(data: AdminLogin, request: Request):
     if check_rate_limit(client_ip):
         raise HTTPException(status_code=429, detail="Too many login attempts. Please try again in 30 minutes.")
     
-    admin = await control_db.admins.find_one({"username": data.username}, {"_id": 0})
+    admin = await control_db.admins.find_one(
+        {"username": {"$regex": f"^{re.escape((data.username or '').strip())}$", "$options": "i"}},
+        {"_id": 0}
+    )
     if not admin:
         record_login_attempt(client_ip)
         raise HTTPException(status_code=401, detail="Invalid credentials")

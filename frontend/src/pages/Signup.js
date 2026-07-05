@@ -61,7 +61,7 @@ export default function Signup() {
           <Label className="text-xs uppercase tracking-wider">Studio / business name</Label>
           <Input data-testid="signup-business" value={form.business_name} onChange={(e) => setForm({ ...form, business_name: e.target.value })} className="mb-4 mt-1" placeholder="Rose Photography" />
           <Label className="text-xs uppercase tracking-wider">Username</Label>
-          <Input data-testid="signup-username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} className="mb-4 mt-1" />
+          <Input data-testid="signup-username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} className="mb-4 mt-1" autoCapitalize="none" autoCorrect="off" autoComplete="username" spellCheck={false} />
           <Label className="text-xs uppercase tracking-wider">Password</Label>
           <Input data-testid="signup-password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} className="mb-4 mt-1" />
           <Label className="text-xs uppercase tracking-wider">Plan (after trial)</Label>

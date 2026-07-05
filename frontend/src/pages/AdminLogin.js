@@ -236,6 +236,10 @@ export default function AdminLogin() {
                   className="border-0 border-b border-[#D4D4D8] bg-transparent rounded-none pl-6 pr-0 py-3 focus-visible:ring-0 focus-visible:border-[#1C1917] placeholder:text-[#A8A29E] text-base"
                   style={{ fontFamily: 'Manrope, sans-serif' }}
                   placeholder="Enter username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  autoComplete="username"
+                  spellCheck={false}
                   required
                 />
               </div>
