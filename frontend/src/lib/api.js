@@ -63,6 +63,13 @@ export const superSetStatus = (id, status) => apiClient.put(`/super/tenants/${id
 export const superSetPlan = (id, plan) => apiClient.put(`/super/tenants/${id}/plan?plan=${plan}`);
 export const superDeleteTenant = (id) => apiClient.delete(`/super/tenants/${id}`);
 export const superPlans = () => apiClient.get('/super/plans');
+export const superOverview = () => apiClient.get('/super/overview');
+export const superPayments = () => apiClient.get('/super/payments');
+export const superGetEmail = () => apiClient.get('/super/email-settings');
+export const superSaveEmail = (data) => apiClient.post('/super/email-settings', data);
+export const superTestEmail = () => apiClient.post('/super/email-settings/test');
+export const superBroadcastRecipients = () => apiClient.get('/super/broadcast/recipients');
+export const superBroadcast = (data) => apiClient.post('/super/broadcast', data);
 
 // Tenant branding
 export const getBranding = () => apiClient.get('/admin/branding');

@@ -441,6 +441,171 @@ async def super_delete_tenant(tenant_id: str, _super=Depends(get_super)):
         shutil.rmtree(tenant_files, ignore_errors=True)
     return {"success": True}
 
+# ─── Super Admin: platform overview / stats ───
+@api_router.get("/super/overview")
+async def super_overview(_super=Depends(get_super)):
+    tenants = await control_db.tenants.find({}, {"_id": 0}).to_list(10000)
+    now = datetime.now(timezone.utc)
+    soon = now + timedelta(days=7)
+    total = len(tenants)
+    active = suspended = trialing = subscribed = total_galleries = 0
+    mrr = 0.0
+    trials_ending = []
+    for t in tenants:
+        if t.get("status") == "suspended":
+            suspended += 1
+        else:
+            active += 1
+        sub = t.get("subscription_status", "trialing")
+        if sub == "active":
+            subscribed += 1
+            mrr += float(PLANS.get(t.get("plan", "starter"), {}).get("price", 0) or 0)
+        elif sub == "trialing":
+            trialing += 1
+        use_tenant(t["id"])
+        try:
+            total_galleries += await db.galleries.count_documents({})
+        except Exception:
+            pass
+        te = t.get("trial_ends_at")
+        if sub == "trialing" and te:
+            try:
+                ted = datetime.fromisoformat(te)
+                if ted.tzinfo is None:
+                    ted = ted.replace(tzinfo=timezone.utc)
+                if now <= ted <= soon:
+                    trials_ending.append({"business_name": t.get("business_name"), "subdomain": t.get("subdomain"), "trial_ends_at": te})
+            except (ValueError, TypeError):
+                pass
+    txns = await control_db.payment_transactions.find(
+        {"$or": [{"payment_status": "paid"}, {"processed": True}]}, {"_id": 0}
+    ).to_list(10000)
+    total_revenue = sum(float(x.get("amount", 0) or 0) for x in txns)
+    return {
+        "total_tenants": total, "active": active, "suspended": suspended,
+        "trialing": trialing, "subscribed": subscribed,
+        "total_galleries": total_galleries,
+        "mrr": round(mrr, 2), "total_revenue": round(total_revenue, 2),
+        "paid_count": len(txns), "currency": "GBP",
+        "trials_ending_soon": sorted(trials_ending, key=lambda x: x["trial_ends_at"]),
+    }
+
+# ─── Super Admin: payments / revenue tracking ───
+@api_router.get("/super/payments")
+async def super_payments(_super=Depends(get_super)):
+    txns = await control_db.payment_transactions.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
+    tmap = {t["id"]: t.get("business_name", "—") for t in await control_db.tenants.find({}, {"_id": 0, "id": 1, "business_name": 1}).to_list(10000)}
+    paid_total = 0.0
+    for x in txns:
+        x["business_name"] = tmap.get(x.get("tenant_id"), "—")
+        is_paid = x.get("payment_status") == "paid" or x.get("processed")
+        x["is_paid"] = bool(is_paid)
+        if is_paid:
+            paid_total += float(x.get("amount", 0) or 0)
+    return {"payments": txns, "count": len(txns), "paid_total": round(paid_total, 2), "currency": "GBP"}
+
+# ─── Super Admin: platform email (SMTP) settings ───
+class PlatformSMTP(BaseModel):
+    smtp_server: str
+    smtp_port: int = 465
+    smtp_email: str
+    smtp_password: Optional[str] = None
+    sender_name: str = "StudioApp"
+
+@api_router.get("/super/email-settings")
+async def super_get_email(_super=Depends(get_super)):
+    doc = await control_db.settings.find_one({"key": "platform_smtp"}, {"_id": 0})
+    if not doc:
+        return {"smtp_server": "", "smtp_port": 465, "smtp_email": "", "smtp_password": "", "sender_name": "StudioApp"}
+    v = doc.get("value", {})
+    return {**v, "smtp_password": "••••••••" if v.get("smtp_password") else ""}
+
+@api_router.post("/super/email-settings")
+async def super_save_email(data: PlatformSMTP, _super=Depends(get_super)):
+    existing = await control_db.settings.find_one({"key": "platform_smtp"}, {"_id": 0})
+    value = {
+        "smtp_server": data.smtp_server, "smtp_port": data.smtp_port,
+        "smtp_email": data.smtp_email, "sender_name": data.sender_name or "StudioApp",
+    }
+    if data.smtp_password and data.smtp_password != "••••••••":
+        value["smtp_password"] = data.smtp_password
+    elif existing and existing.get("value", {}).get("smtp_password"):
+        value["smtp_password"] = existing["value"]["smtp_password"]
+    await control_db.settings.update_one({"key": "platform_smtp"}, {"$set": {"key": "platform_smtp", "value": value}}, upsert=True)
+    return {"success": True}
+
+@api_router.post("/super/email-settings/test")
+async def super_test_email(_super=Depends(get_super)):
+    doc = await control_db.settings.find_one({"key": "platform_smtp"}, {"_id": 0})
+    if not doc or not doc.get("value", {}).get("smtp_email"):
+        raise HTTPException(status_code=400, detail="Platform email not configured")
+    smtp = doc["value"]
+    try:
+        send_smtp_email(smtp, smtp["smtp_email"], "StudioApp — Email test",
+                        build_branded_email("<p style='font-size:15px;color:#57534E;'>Your StudioApp platform email is configured correctly.</p>"))
+        return {"success": True, "message": "Test email sent to " + smtp["smtp_email"]}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"SMTP error: {str(e)}")
+
+def _tenant_emails(tenants, admins_by_tenant):
+    recips = []
+    for t in tenants:
+        email = (t.get("contact_email") or "").strip()
+        if not email:
+            u = (admins_by_tenant.get(t["id"], "") or "").strip()
+            if "@" in u:
+                email = u
+        if email and "@" in email:
+            recips.append({"business_name": t.get("business_name"), "email": email})
+    return recips
+
+@api_router.get("/super/broadcast/recipients")
+async def super_broadcast_recipients(_super=Depends(get_super)):
+    tenants = await control_db.tenants.find({}, {"_id": 0}).to_list(10000)
+    admins = await control_db.admins.find({}, {"_id": 0, "tenant_id": 1, "username": 1}).to_list(10000)
+    amap = {a["tenant_id"]: a.get("username") for a in admins}
+    recips = _tenant_emails(tenants, amap)
+    return {"recipients": recips, "count": len(recips)}
+
+class SuperBroadcast(BaseModel):
+    subject: str
+    body: str
+
+@api_router.post("/super/broadcast")
+async def super_broadcast(data: SuperBroadcast, _super=Depends(get_super)):
+    if not data.subject.strip() or not data.body.strip():
+        raise HTTPException(status_code=400, detail="Subject and body are required")
+    doc = await control_db.settings.find_one({"key": "platform_smtp"}, {"_id": 0})
+    if not doc or not doc.get("value", {}).get("smtp_email"):
+        raise HTTPException(status_code=400, detail="Platform email not configured. Set it up in the Email tab first.")
+    smtp = doc["value"]
+    tenants = await control_db.tenants.find({}, {"_id": 0}).to_list(10000)
+    admins = await control_db.admins.find({}, {"_id": 0, "tenant_id": 1, "username": 1}).to_list(10000)
+    amap = {a["tenant_id"]: a.get("username") for a in admins}
+    recips = _tenant_emails(tenants, amap)
+    if not recips:
+        raise HTTPException(status_code=400, detail="No photographers have a valid email address")
+    body_html = ""
+    for line in data.body.strip().split("\n"):
+        s = line.strip()
+        body_html += "<br>" if not s else f'<p style="font-size:15px;color:#57534E;margin:0 0 12px 0;line-height:1.8;">{s}</p>\n'
+    html_content = build_branded_email(body_html)
+    sent = 0
+    failed = []
+    for r in recips:
+        try:
+            send_smtp_email(smtp, r["email"], data.subject.strip(), html_content)
+            sent += 1
+        except Exception as e:
+            failed.append({"business_name": r["business_name"], "email": r["email"], "error": str(e)})
+    await control_db.settings.update_one(
+        {"key": "broadcast_log"},
+        {"$push": {"entries": {"$each": [{"subject": data.subject.strip(), "sent": sent, "failed": len(failed), "at": datetime.now(timezone.utc).isoformat()}], "$slice": -50}}},
+        upsert=True,
+    )
+    return {"success": True, "sent": sent, "failed": len(failed), "failures": failed}
+
+
 # ─── Tenant branding (self-service) ───
 class BrandingUpdate(BaseModel):
     business_name: Optional[str] = None

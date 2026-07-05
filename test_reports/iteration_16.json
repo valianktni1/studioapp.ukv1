@@ -1,0 +1,22 @@
+{
+  "summary": "Frontend-only test of Super Admin 4-tab dashboard (Overview, Photographers, Payments, Broadcast Email). Login, tab switching, data rendering, and regression (root Sign In + /admin tenant login for mark) all verified working.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "OverviewTab: d.trials_ending_soon is accessed without optional chaining — if backend ever omits the field this will throw. Consider (d.trials_ending_soon || []).",
+    "SMTP form: smtp_password field is bound to state — GET /super/email-settings likely returns the current password back to the client. Recommend backend redact the password on GET, and treat empty string on save as 'no change'."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Verified via Playwright on preview URL. Super admin login (superadmin/Stu!d10App_2026xQ) works. Overview shows: Photographers=2, Subscribed=0, On trial=2, Galleries=2, MRR=£0, Total revenue=£0, Suspended=0, 'No trials ending soon.'. Photographers tab lists tenants, New Photographer btn opens dialog. Payments tab shows Collected £0, Transactions=1 (Weddings By Mark, pro, £35, initiated, 04 Jul 2026). Email tab: all 10 required data-testids present, recipient banner shows '2 photographer(s)', Save returned 'Email settings saved' toast, Send test returned expected 'SMTP error: No address associated with hostname' toast (expected in sandbox). New Photographer button correctly only visible on Photographers tab. Regression: '/' shows Sign In + go-to-signup-link; /admin login as mark/Test!2026 navigates to /admin/dashboard successfully.",
+  "test_credentials": "superadmin / Stu!d10App_2026xQ ; tenant admin mark / Test!2026"
+}
