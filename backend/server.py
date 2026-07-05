@@ -1595,6 +1595,17 @@ async def get_gallery_detail(gallery_id: str, admin=Depends(get_admin)):
     files = await db.files.find({"gallery_id": gallery_id}, {"_id": 0}).sort("uploaded_at", 1).to_list(50000)
     shares = await db.shares.find({"gallery_id": gallery_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
     
+    # Annotate videos with optimisation state for the badge
+    for f in files:
+        if f.get("file_type") == "video":
+            fp = get_gallery_path(gallery["folder_name"]) / f.get("subfolder", "") / f["filename"]
+            try:
+                f["has_web"] = get_web_version_path(fp).exists()
+            except Exception:
+                f["has_web"] = False
+            size = f.get("file_size", 0) or 0
+            f["optimise_eligible"] = VIDEO_OPTIMISE_MIN_BYTES <= size <= VIDEO_OPTIMISE_MAX_BYTES
+    
     # Auto-discover subfolders from files that aren't in the gallery's subfolders list
     known_subfolders = set(gallery.get("subfolders", []))
     file_subfolders = set(f["subfolder"] for f in files if f.get("subfolder"))

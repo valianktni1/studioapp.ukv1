@@ -22,7 +22,7 @@ import {
 import {
   ArrowLeft, Upload, Trash2, Copy, FolderOpen, Share2, QrCode,
   MoreVertical, Link, Lock, Globe, Image as ImageIcon, Film, Check,
-  Download, Plus, X, Heart, Calendar as CalendarIcon, Clock, Star, FileText, Mail, Send, Info
+  Download, Plus, X, Heart, Calendar as CalendarIcon, Clock, Star, FileText, Mail, Send, Info, Loader2, CheckCircle2
 } from "lucide-react";
 import {
   getGallery, uploadFiles, deleteFile, deleteSubfolder, copyToSubfolder, adminDownloadFile,
@@ -125,10 +125,11 @@ export default function AdminGalleryDetail() {
           setTranscodeStatus({});
           clearInterval(transcodePollingRef.current);
           transcodePollingRef.current = null;
+          loadGallery();  // refresh so the "Optimised" badge (has_web) updates
         }
       } catch { /* ignore poll errors */ }
     }, 2000);
-  }, [id]);
+  }, [id, loadGallery]);
 
   useEffect(() => {
     return () => {
@@ -855,6 +856,18 @@ export default function AdminGalleryDetail() {
                             </div>
                           </div>
                         </div>
+                      )}
+                      {/* Persistent video optimisation badge */}
+                      {file.file_type === 'video' && !selectMode && !isTranscoding && !justCompleted && (
+                        file.has_web ? (
+                          <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full flex items-center gap-1 text-[10px] font-semibold z-10" style={{ backgroundColor: 'rgba(34,197,94,0.92)', color: 'white' }} data-testid={`video-opt-badge-${file.id}`}>
+                            <CheckCircle2 className="w-3 h-3" /> Optimised
+                          </div>
+                        ) : file.optimise_eligible ? (
+                          <div className="absolute top-2 left-2 px-2 py-0.5 rounded-full flex items-center gap-1 text-[10px] font-semibold z-10" style={{ backgroundColor: 'rgba(212,175,55,0.92)', color: 'white' }} data-testid={`video-opt-badge-${file.id}`}>
+                            <Loader2 className="w-3 h-3 animate-spin" /> Optimising…
+                          </div>
+                        ) : null
                       )}
                       {/* Cover indicator */}
                       {isCover && (
