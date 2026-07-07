@@ -284,20 +284,25 @@ export default function AdminDashboard() {
         )}
 
         {/* Dashboard Stats */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-10" data-testid="dashboard-stats">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 mb-10" data-testid="dashboard-stats">
           {[
-            { label: "Active Galleries", value: dashStats.active_galleries, icon: Camera, color: '#D4AF37', bg: 'rgba(212,175,55,0.08)' },
-            { label: "Expiring Soon", value: dashStats.expiring_soon, icon: AlertCircle, color: dashStats.expiring_soon > 0 ? '#F59E0B' : '#A8A29E', bg: dashStats.expiring_soon > 0 ? 'rgba(245,158,11,0.08)' : 'rgba(168,162,158,0.06)' },
-            { label: "Downloads This Week", value: dashStats.downloads_this_week, icon: Download, color: '#22C55E', bg: 'rgba(34,197,94,0.08)' },
-            { label: "Pending Albums", value: dashStats.pending_albums, icon: FolderHeart, color: dashStats.pending_albums > 0 ? '#EC4899' : '#A8A29E', bg: dashStats.pending_albums > 0 ? 'rgba(236,72,153,0.08)' : 'rgba(168,162,158,0.06)' },
-            { label: "Storage Used", value: dashStats.storage_used_bytes >= 1099511627776 ? `${(dashStats.storage_used_bytes / 1099511627776).toFixed(2)} TB` : `${(dashStats.storage_used_bytes / 1073741824).toFixed(1)} GB`, icon: HardDrive, color: '#6366F1', bg: 'rgba(99,102,241,0.08)' },
-          ].map(({ label, value, icon: Icon, color, bg }) => (
-            <div key={label} className="p-4 sm:p-5 border rounded-sm flex items-center justify-between sm:block" style={{ borderColor: '#F5F2EB', backgroundColor: bg }} data-testid={`stat-${label.toLowerCase().replace(/\s+/g, '-')}`}>
-              <div className="flex items-center gap-2 sm:mb-2">
-                <Icon className="w-4 h-4 flex-shrink-0" style={{ color }} />
-                <span className="text-[10px] tracking-[0.15em] uppercase font-semibold" style={{ color: '#A8A29E', fontFamily: 'Manrope, sans-serif' }}>{label}</span>
+            { label: "Active Galleries", value: dashStats.active_galleries, icon: Camera, color: '#D4AF37', bg: 'rgba(212,175,55,0.10)' },
+            { label: "Expiring Soon", value: dashStats.expiring_soon, icon: AlertCircle, color: dashStats.expiring_soon > 0 ? '#F59E0B' : '#A8A29E', bg: dashStats.expiring_soon > 0 ? 'rgba(245,158,11,0.10)' : 'rgba(168,162,158,0.07)' },
+            { label: "Downloads This Week", value: dashStats.downloads_this_week, icon: Download, color: '#22C55E', bg: 'rgba(34,197,94,0.10)' },
+            { label: "Pending Albums", value: dashStats.pending_albums, icon: FolderHeart, color: dashStats.pending_albums > 0 ? '#EC4899' : '#A8A29E', bg: dashStats.pending_albums > 0 ? 'rgba(236,72,153,0.10)' : 'rgba(168,162,158,0.07)' },
+            { label: "Storage Used", value: dashStats.storage_used_bytes >= 1099511627776 ? `${(dashStats.storage_used_bytes / 1099511627776).toFixed(2)} TB` : `${(dashStats.storage_used_bytes / 1073741824).toFixed(1)} GB`, icon: HardDrive, color: '#6366F1', bg: 'rgba(99,102,241,0.10)', span: true },
+          ].map(({ label, value, icon: Icon, color, bg, span }) => (
+            <div key={label}
+              className={`p-4 sm:p-5 rounded-xl border flex flex-col gap-3 transition-transform hover:-translate-y-0.5 ${span ? 'col-span-2 lg:col-span-1' : ''}`}
+              style={{ borderColor: `${color}33`, backgroundColor: bg, borderLeft: `3px solid ${color}` }}
+              data-testid={`stat-${label.toLowerCase().replace(/\s+/g, '-')}`}>
+              <div className="flex items-center gap-2">
+                <span className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${color}22` }}>
+                  <Icon className="w-4 h-4" style={{ color }} />
+                </span>
+                <span className="text-[10px] leading-tight tracking-[0.12em] uppercase font-semibold" style={{ color: '#78716C', fontFamily: 'Manrope, sans-serif' }}>{label}</span>
               </div>
-              <span className="text-3xl font-medium flex-shrink-0" style={{ fontFamily: 'Cormorant Garamond, serif', color: '#1C1917' }}>{value}</span>
+              <span className="text-3xl sm:text-4xl font-medium" style={{ fontFamily: 'Cormorant Garamond, serif', color: '#1C1917' }}>{value}</span>
             </div>
           ))}
         </motion.div>
